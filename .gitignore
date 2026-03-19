@@ -1,0 +1,18 @@
+# Archivos de configuración local
+db_config.json
+*.pyc
+__pycache__/
+*.log
+
+# Entorno virtual
+venv/
+env/
+.env
+
+# Archivos de IDE
+.vscode/
+.idea/
+
+# Archivos generados
+*.xlsx
+*.ino
