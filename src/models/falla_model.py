@@ -209,38 +209,47 @@ class FallaModel:
             return False
 
     def eliminar_falla_activa(self, numero_falla: int) -> bool:
-        """Elimina una falla de activas"""
+        """Elimina una falla de la tabla fallas_activas"""
         conn = self.db.get_connection()
         if not conn:
+            logger.error("No se pudo conectar a MySQL")
             return False
         
         try:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM fallas_activas WHERE numero_falla = %s", (numero_falla,))
+            afectadas = cursor.rowcount
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"Falla activa #{numero_falla} eliminada")
-            return True
+            
+            if afectadas > 0:
+                logger.info(f"Falla activa #{numero_falla} eliminada de BD")
+                return True
+            else:
+                logger.warning(f"No se encontró falla activa #{numero_falla} para eliminar")
+                return True  # Considerar como éxito si no existe
+                
         except Exception as e:
             logger.error(f"Error eliminando falla activa: {e}")
             if conn:
                 conn.rollback()
                 conn.close()
             return False
-
+    
     # ===== HISTORIAL DE FALLAS =====
     
     def guardar_falla_en_historial(self, alerta: Dict) -> bool:
         """Guarda una falla finalizada en el historial"""
         conn = self.db.get_connection()
         if not conn:
+            logger.error("No se pudo conectar a MySQL")
             return False
         
         try:
             cursor = conn.cursor()
             
-            # Calcular tiempos (igual que en tu original)
+            # Calcular tiempos
             formato = "%Y-%m-%d %H:%M:%S"
             t_inicio_proceso = None
             t_proceso_fin = None
@@ -273,14 +282,15 @@ class FallaModel:
                     minutos = (diff_total.seconds % 3600) // 60
                     segundos = diff_total.seconds % 60
                     t_total = f"{horas:02d}:{minutos:02d}:{segundos:02d}"
-                except:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error calculando tiempos: {e}")
             
+            # Insertar en historial
             cursor.execute("""
                 INSERT INTO fallas 
                 (maquina, tipo, inicio, proceso, fin, numero_falla, 
-                 t_inicio_proceso, t_proceso_fin, t_total, estado, 
-                 nota_pendiente, fecha_pendiente)
+                t_inicio_proceso, t_proceso_fin, t_total, estado, 
+                nota_pendiente, fecha_pendiente)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 alerta["maquina"],
@@ -309,7 +319,7 @@ class FallaModel:
                 conn.rollback()
                 conn.close()
             return False
-
+    
     # ===== TIPOS DE FALLA =====
     
     def cargar_tipos_falla(self) -> List[Dict]:
@@ -431,6 +441,32 @@ class FallaModel:
             return True
         except Exception as e:
             logger.error(f"Error guardando mapeo: {e}")
+            if conn:
+                conn.rollback()
+                conn.close()
+            return False
+        
+    def limpiar_todas_fallas_activas(self) -> bool:
+        """Elimina todas las fallas de la tabla fallas_activas"""
+        conn = self.db.get_connection()
+        if not conn:
+            logger.error("No se pudo conectar a MySQL")
+            return False
+        
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM fallas_activas")
+            afectadas = cursor.rowcount
+            conn.commit()
+            cursor.close()
+            conn.close()
+            
+            if afectadas > 0:
+                logger.info(f"Eliminadas {afectadas} fallas activas (limpieza BASIC)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error limpiando fallas activas: {e}")
             if conn:
                 conn.rollback()
                 conn.close()

@@ -30,18 +30,31 @@ class FallaController:
         self.config_contador = self.config_model.cargar_config_contador()
 
     def cargar_estado_inicial(self):
-        """Carga fallas activas y mapeo desde la BD"""
-        self.fallas_activas = self.falla_model.cargar_fallas_activas()
+        """Carga fallas activas y mapeo desde la BD según licencia"""
+        
+        # Verificar si debe recuperar fallas (solo MID y PRO)
+        debe_recuperar = self.licencia.recupera_fallas
+        
+        if debe_recuperar:
+            # MID y PRO: recuperar fallas activas
+            self.fallas_activas = self.falla_model.cargar_fallas_activas()
+            logger.info(f"Recuperadas {len(self.fallas_activas)} fallas activas (licencia {self.licencia.config.get('license_type')})")
+        else:
+            # BASIC: limpiar fallas activas
+            logger.info("Licencia BASIC: Limpiando fallas activas existentes...")
+            self.falla_model.limpiar_todas_fallas_activas()
+            self.fallas_activas = []
+            logger.info("Fallas activas eliminadas (licencia BASIC)")
+        
+        # Cargar mapeo de botones (siempre)
         self.mapeo_botones = self.falla_model.cargar_mapeo_botones()
         
-        # Asignar números de falla si no tienen
+        # Asignar números de falla si tienen (solo si hay fallas)
         for falla in self.fallas_activas:
             if "numero_falla" not in falla:
                 falla["numero_falla"] = self._obtener_siguiente_numero_falla()
             self.numeros_falla_asignados[id(falla)] = falla["numero_falla"]
         
-        logger.info(f"Estado inicial cargado: {len(self.fallas_activas)} fallas activas")
-
     def _obtener_siguiente_numero_falla(self) -> int:
         """Obtiene el siguiente número de falla según la configuración"""
         config = self.config_contador
@@ -131,13 +144,29 @@ class FallaController:
         elif estado_actual == "en_proceso":
             falla["fin"] = ahora
             falla["estado"] = "resuelta"
-            self.falla_model.guardar_falla_en_historial(falla)
-            self.fallas_activas.remove(falla)
-            logger.info(f"Falla finalizada: {falla['maquina']} - {falla['tipo']}")
             
+            # Guardar en historial
+            if self.falla_model.guardar_falla_en_historial(falla):
+                # Eliminar de activas en BD
+                self.falla_model.eliminar_falla_activa(falla.get("numero_falla"))
+                
+                # Eliminar de la lista en memoria
+                if falla in self.fallas_activas:
+                    self.fallas_activas.remove(falla)
+                    
+                # Eliminar del diccionario de números
+                for key, value in list(self.numeros_falla_asignados.items()):
+                    if value == falla.get("numero_falla"):
+                        del self.numeros_falla_asignados[key]
+                        break
+                
+                logger.info(f"Falla finalizada: {falla['maquina']} - {falla['tipo']}")
+            else:
+                logger.error(f"Error al guardar falla finalizada en historial")
+                
         elif estado_actual == "pendiente":
             logger.info("Falla pendiente, requiere acción manual")
-
+    
     def _crear_nueva_falla(self, maquina: str, tipo: str, ahora: str):
         """Crea una nueva falla"""
         numero_falla = self._obtener_siguiente_numero_falla()
@@ -177,13 +206,29 @@ class FallaController:
         alerta["fin"] = ahora
         alerta["estado"] = "resuelta"
         
-        self.falla_model.guardar_falla_en_historial(alerta)
-        
-        if alerta in self.fallas_activas:
-            self.fallas_activas.remove(alerta)
-        
-        if self.on_fallas_actualizadas:
-            self.on_fallas_actualizadas()
+        # 1. Guardar en historial
+        if self.falla_model.guardar_falla_en_historial(alerta):
+            logger.info(f"Falla #{alerta.get('numero_falla')} guardada en historial")
+            
+            # 2. Eliminar de fallas_activas en BD
+            self.falla_model.eliminar_falla_activa(alerta.get("numero_falla"))
+            
+            # 3. Eliminar de la lista en memoria
+            if alerta in self.fallas_activas:
+                self.fallas_activas.remove(alerta)
+                logger.info(f"Falla #{alerta.get('numero_falla')} eliminada de fallas_activas")
+            
+            # 4. Eliminar del diccionario de números asignados
+            for key, value in list(self.numeros_falla_asignados.items()):
+                if value == alerta.get("numero_falla"):
+                    del self.numeros_falla_asignados[key]
+                    break
+            
+            # 5. Notificar a las vistas
+            if self.on_fallas_actualizadas:
+                self.on_fallas_actualizadas()
+        else:
+            logger.error(f"Error al guardar falla #{alerta.get('numero_falla')} en historial")
 
     def marcar_pendiente(self, alerta: Dict, nota: str):
         """Marca una falla como pendiente con nota"""
@@ -232,10 +277,45 @@ class FallaController:
         }
 
     def guardar_estado(self):
-        """Guarda el estado actual en BD"""
-        self.falla_model.guardar_fallas_activas(self.fallas_activas)
+        """Guarda el estado actual en BD solo si la licencia lo permite"""
+        if self.licencia.recupera_fallas:
+            self.falla_model.guardar_fallas_activas(self.fallas_activas)
+            logger.info(f"Estado guardado: {len(self.fallas_activas)} fallas activas")
+        else:
+            logger.info("Licencia BASIC: No se guarda estado de fallas")
 
     def actualizar_mapeo(self, nuevo_mapeo: Dict[int, str]):
         """Actualiza el mapeo de botones"""
         self.mapeo_botones = nuevo_mapeo
         self.falla_model.guardar_mapeo_botones(nuevo_mapeo)
+        
+    def limpiar_inconsistencias(self):
+        """Limpia fallas que están en historial pero aún en activas"""
+        try:
+            conn = self.falla_model.db.get_connection()
+            if not conn:
+                return
+            
+            cursor = conn.cursor()
+            
+            # Buscar fallas que tienen fin (deberían estar en historial)
+            cursor.execute("""
+                SELECT numero_falla FROM fallas_activas 
+                WHERE fin IS NOT NULL
+            """)
+            fallas_con_fin = cursor.fetchall()
+            
+            if fallas_con_fin:
+                logger.info(f"Encontradas {len(fallas_con_fin)} fallas con fin en activas")
+                for (num_falla,) in fallas_con_fin:
+                    cursor.execute("DELETE FROM fallas_activas WHERE numero_falla = %s", (num_falla,))
+                    logger.info(f"Eliminada falla #{num_falla} de activas (tenía fin)")
+                
+                conn.commit()
+            
+            conn.close()
+            
+        except Exception as e:
+            logger.error(f"Error limpiando inconsistencias: {e}")
+            if conn:
+                conn.close()

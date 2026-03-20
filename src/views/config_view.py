@@ -37,6 +37,13 @@ class ConfigView:
         # Variables para configuración
         self._inicializar_variables()
         self._setup_ui()
+    
+        # Forzar actualización de la ventana
+        self.ventana.update_idletasks()
+        self.ventana.update()
+        
+        print("DEBUG: ConfigView completamente inicializada")
+
         
     def _inicializar_variables(self):
         """Inicializa las variables de la UI"""
@@ -61,6 +68,8 @@ class ConfigView:
         
     def _setup_ui(self):
         """Configura la interfaz de usuario"""
+        print("DEBUG: _setup_ui INICIADO")
+        
         # Contenedor principal con scroll
         main_container = tk.Frame(self.ventana, bg=self.theme.colores["fondo"])
         main_container.pack(fill="both", expand=True, padx=20, pady=20)
@@ -71,53 +80,70 @@ class ConfigView:
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 18, "bold")).pack(pady=(0, 20))
         
-        # Canvas con scrollbar
+        # Frame para canvas y scrollbar
         canvas_frame = tk.Frame(main_container, bg=self.theme.colores["fondo"])
         canvas_frame.pack(fill="both", expand=True)
         
+        # Canvas y scrollbar
         canvas = tk.Canvas(canvas_frame, bg=self.theme.colores["fondo"], highlightthickness=0)
         scrollbar = tk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.theme.colores["fondo"])
         
+        # Configurar scrollable frame
         scrollable_frame.bind(
             "<Configure>",
             lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
         )
         
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw", width=canvas.winfo_width())
+        # Crear ventana en el canvas - IMPORTANTE: darle un tamaño inicial
+        canvas_window = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        
+        # Configurar canvas para que se expanda
         canvas.configure(yscrollcommand=scrollbar.set)
+        
+        def configure_canvas(event):
+            # Actualizar el ancho del canvas
+            canvas.itemconfig(canvas_window, width=event.width)
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        
+        canvas.bind('<Configure>', configure_canvas)
         
         def _on_mousewheel(event):
             canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
         canvas.bind("<MouseWheel>", _on_mousewheel)
         
-        # ===== 1. CONFIGURACIÓN DE BASE DE DATOS =====
+        print("DEBUG: Canvas configurado")
+        
+        # ===== SECCIONES =====
+        print("DEBUG: Creando sección BD")
         self._crear_seccion_bd(scrollable_frame)
         
-        # ===== 2. NOMBRE DEL SISTEMA =====
+        print("DEBUG: Creando sección nombre")
         self._crear_seccion_nombre(scrollable_frame)
         
-        # ===== 3. TIPOS DE FALLA =====
+        print("DEBUG: Creando sección tipos falla")
         self._crear_seccion_tipos_falla(scrollable_frame)
         
-        # ===== 4. MAPEO DE BOTONES =====
+        print("DEBUG: Creando sección mapeo")
         self._crear_seccion_mapeo(scrollable_frame)
         
-        # ===== 5. TEMAS Y COLORES =====
+        print("DEBUG: Creando sección temas")
         self._crear_seccion_temas(scrollable_frame)
         
-        # ===== 6. BOTONES DE ACCIÓN =====
+        print("DEBUG: Creando botones acción")
         self._crear_botones_accion(scrollable_frame)
         
+        # Empaquetar canvas y scrollbar
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Limpiar bind al cerrar
-        self.ventana.protocol("WM_DELETE_WINDOW", self._cerrar)
-        
+        print("DEBUG: _setup_ui FINALIZADO")
+     
     def _crear_seccion_bd(self, parent):
         """Crea la sección de configuración de base de datos"""
+        print("DEBUG: _crear_seccion_bd - Creando tarjeta")
+        
         card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1,
                        highlightbackground=self.theme.colores["texto_secundario"])
         card.pack(fill="x", padx=10, pady=(0, 15))
@@ -253,20 +279,28 @@ class ConfigView:
                  pady=5,
                  cursor="hand2",
                  command=self._cambiar_nombre).pack(side="left")
-        
     def _crear_seccion_tipos_falla(self, parent):
         """Crea la sección de tipos de falla"""
+        print("DEBUG: _crear_seccion_tipos_falla INICIADO")
+        
         card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1,
-                       highlightbackground=self.theme.colores["texto_secundario"])
+                    highlightbackground=self.theme.colores["texto_secundario"])
         card.pack(fill="x", padx=10, pady=(0, 15))
         
         # Límite de licencia
         limite_frame = tk.Frame(card, bg=self.theme.colores["card"])
         limite_frame.pack(fill="x", padx=15, pady=(10, 0))
         
-        tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
-        tipos_actuales = len(tipos_data)
+        try:
+            tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
+            print(f"DEBUG: tipos_data obtenido: {tipos_data}")
+            tipos_actuales = len(tipos_data)
+        except Exception as e:
+            print(f"ERROR obteniendo tipos: {e}")
+            tipos_actuales = 0
+        
         max_tipos = self.controller.licencia_controller.max_tipos_falla
+        print(f"DEBUG: tipos_actuales={tipos_actuales}, max_tipos={max_tipos}")
         
         color_limite = self.theme.colores["success"] if tipos_actuales < max_tipos else self.theme.colores["danger"]
         
@@ -293,6 +327,7 @@ class ConfigView:
         self.tipos_list_frame = tk.Frame(card, bg=self.theme.colores["card"])
         self.tipos_list_frame.pack(fill="x", padx=15, pady=5)
         
+        print("DEBUG: Llamando a _cargar_lista_tipos")
         self._cargar_lista_tipos()
         
         # Botón agregar tipo
@@ -300,16 +335,18 @@ class ConfigView:
         btn_frame.pack(fill="x", padx=15, pady=(10, 15))
         
         tk.Button(btn_frame,
-                 text="➕ Agregar Tipo",
-                 bg=self.theme.colores["success"],
-                 fg=self.theme.colores["texto"],
-                 font=("Segoe UI", 9),
-                 relief="flat",
-                 padx=10,
-                 pady=5,
-                 cursor="hand2",
-                 command=self._agregar_tipo).pack(side="left", padx=5)
+                text="➕ Agregar Tipo",
+                bg=self.theme.colores["success"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 9),
+                relief="flat",
+                padx=10,
+                pady=5,
+                cursor="hand2",
+                command=self._agregar_tipo).pack(side="left", padx=5)
         
+        print("DEBUG: _crear_seccion_tipos_falla FINALIZADO")
+    
     def _cargar_lista_tipos(self):
         """Carga la lista de tipos de falla con sus colores"""
         for widget in self.tipos_list_frame.winfo_children():

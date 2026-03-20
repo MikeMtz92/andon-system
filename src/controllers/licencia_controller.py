@@ -1,6 +1,7 @@
 # src/controllers/licencia_controller.py
 
 import logging
+from datetime import datetime  # <-- AÑADIR ESTA LÍNEA
 from typing import Dict, Tuple, Optional
 from src.models.licencia_model import LicenciaModel
 from src.models.config_model import ConfigModel
@@ -63,7 +64,7 @@ class LicenciaController:
             self.excel_una_vez_dia = False
             self.puede_generar_esp32 = False
             self.puede_configurar_proyeccion = False
-            self.recupera_fallas = False
+            self.recupera_fallas = False  # BASIC NO recupera fallas
             self.reset_consecutivo = "diario"
             self.puede_usar_pendientes = False
             self.puede_agregar_notas = False
@@ -80,7 +81,7 @@ class LicenciaController:
             self.excel_una_vez_dia = False
             self.puede_generar_esp32 = False
             self.puede_configurar_proyeccion = True
-            self.recupera_fallas = True
+            self.recupera_fallas = True  # MID recupera fallas
             self.reset_consecutivo = "configurable"
             self.puede_usar_pendientes = True
             self.puede_agregar_notas = False
@@ -97,7 +98,7 @@ class LicenciaController:
             self.excel_una_vez_dia = False
             self.puede_generar_esp32 = True
             self.puede_configurar_proyeccion = True
-            self.recupera_fallas = True
+            self.recupera_fallas = True  # PRO recupera fallas
             self.reset_consecutivo = "configurable"
             self.puede_usar_pendientes = True
             self.puede_agregar_notas = True
@@ -156,7 +157,10 @@ class LicenciaController:
                 'max_fallas': info['max_fallas'],
                 'max_maquinas': info['max_maquinas'],
                 'last_validation': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'expires_at': info['expires_at']
+                'expires_at': info['expires_at'],
+                'demo_used': False,  # Limpiar demo si existía
+                'demo_start': "",
+                'demo_expires': ""
             })
             self.licencia_model.guardar_config_licencia(self.config)
             self._aplicar_limites_por_tipo(info['license_type'])
@@ -176,7 +180,8 @@ class LicenciaController:
                 'demo_used': True,
                 'demo_start': datetime.now().strftime("%Y-%m-%d"),
                 'demo_expires': info,
-                'license_type': 'demo'
+                'license_type': 'demo',
+                'license_key': ""  # Limpiar licencia si existía
             })
             self.licencia_model.guardar_config_licencia(self.config)
             self._aplicar_limites_por_tipo('demo')
@@ -193,7 +198,8 @@ class LicenciaController:
             'max_maquinas': 5,
             'last_validation': "",
             'demo_used': False,
-            'demo_expires': ""
+            'demo_expires': "",
+            'expires_at': ""
         })
         self.licencia_model.guardar_config_licencia(self.config)
         self._aplicar_limites_por_tipo('basic')

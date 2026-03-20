@@ -59,6 +59,11 @@ class AppController:
         
         # Configurar cierre
         self._setup_shutdown_handlers()
+        
+        self.auto_update_timer = None
+
+
+    # En el método initialize, después de cargar la configuración del sistema
 
     def initialize(self) -> bool:
         """Inicializa todos los componentes"""
@@ -88,6 +93,9 @@ class AppController:
             self.config_sistema = self.config_model.cargar_config_sistema()
             self.theme_service.cargar_desde_config(self.config_sistema)
             
+            # ¡NUEVO! Cargar los tipos de falla en el ThemeService
+            self.theme_service.cargar_tipos_falla(self.falla_controller)
+            
             self.config_proyeccion = self.config_model.cargar_config_proyeccion()
             
             # 6. Generar ID de instalación
@@ -102,7 +110,7 @@ class AppController:
         except Exception as e:
             logger.error(f"Error inicializando controlador: {e}")
             return False
-
+    
     def start_services(self):
         """Inicia los servicios de red y serial"""
         self.network_service.start(self._on_network_event)
@@ -143,29 +151,48 @@ class AppController:
             except Exception as e:
                 logger.error(f"Error en actualización automática: {e}")
             
-            # Programar siguiente actualización
+            # Programar siguiente actualización solo si sigue corriendo
             if self.running:
                 import threading
-                threading.Timer(60, actualizar).start()
+                self.auto_update_timer = threading.Timer(60, actualizar)
+                self.auto_update_timer.daemon = True
+                self.auto_update_timer.start()
         
-        threading.Timer(60, actualizar).start()
+        self.auto_update_timer = threading.Timer(60, actualizar)
+        self.auto_update_timer.daemon = True
+        self.auto_update_timer.start()
         logger.info("Actualización automática iniciada (cada 60s)")
 
     def _hubo_cambios(self, viejas, nuevas) -> bool:
         """Compara dos listas de fallas para detectar cambios"""
+        # Si cambia el número, hubo cambios
         if len(viejas) != len(nuevas):
+            logger.info(f"Cambio detectado: {len(viejas)} vs {len(nuevas)} fallas")
             return True
         
-        dict_viejo = {(f.get('maquina'), f.get('tipo'), f.get('numero_falla', 0)): f for f in viejas}
-        dict_nuevo = {(f.get('maquina'), f.get('tipo'), f.get('numero_falla', 0)): f for f in nuevas}
+        # Crear diccionarios con clave única
+        dict_viejo = {}
+        for f in viejas:
+            key = (f.get('maquina'), f.get('tipo'), f.get('numero_falla', 0))
+            dict_viejo[key] = f
         
+        dict_nuevo = {}
+        for f in nuevas:
+            key = (f.get('maquina'), f.get('tipo'), f.get('numero_falla', 0))
+            dict_nuevo[key] = f
+        
+        # Comparar cada falla
         for key, falla_vieja in dict_viejo.items():
             if key not in dict_nuevo:
+                logger.info(f"Falla eliminada: {key}")
                 return True
+            
             falla_nueva = dict_nuevo[key]
             for campo in ['estado', 'proceso', 'fin', 'nota_pendiente']:
                 if falla_vieja.get(campo) != falla_nueva.get(campo):
+                    logger.info(f"Cambio en falla {key}: {campo} cambió de {falla_vieja.get(campo)} a {falla_nueva.get(campo)}")
                     return True
+        
         return False
 
     def _setup_shutdown_handlers(self):
@@ -182,22 +209,36 @@ class AppController:
         logger.info(f"Señal de cierre recibida: {signum}")
         self.shutdown()
         sys.exit(0)
-
+    
     def shutdown(self):
         """Cierra la aplicación de forma segura"""
         logger.info("Cerrando aplicación...")
         self.running = False
         
         # Detener servicios
-        self.network_service.stop()
-        self.serial_service.stop()
+        try:
+            self.network_service.stop()
+        except:
+            pass
         
-        # Guardar estado
-        if self.falla_controller:
-            self.falla_controller.guardar_estado()
+        try:
+            self.serial_service.stop()
+        except:
+            pass
+        
+        # Guardar estado según licencia
+        try:
+            if self.falla_controller and self.licencia_controller.recupera_fallas:
+                self.falla_controller.guardar_estado()
+                logger.info("Estado guardado (licencia MID/PRO)")
+            else:
+                self.falla_controller.falla_model.limpiar_todas_fallas_activas()
+                logger.info("Fallas limpiadas (licencia BASIC)")
+        except Exception as e:
+            logger.error(f"Error guardando estado: {e}")
         
         logger.info("Aplicación cerrada")
-
+    
     def get_maquinas_permitidas(self) -> list:
         """Retorna la lista de máquinas según licencia"""
         return [str(i) for i in range(1, self.licencia_controller.max_maquinas_permitidas + 1)]

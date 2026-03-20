@@ -20,6 +20,10 @@ class MainView:
         self.root.geometry("1400x800")
         self.root.configure(bg=self.theme.colores["fondo"])
         
+        # Configurar cierre limpio
+        self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+        
         # Vistas - las crearemos bajo demanda
         self.current_view = None
         self.andon_view = None
@@ -30,6 +34,18 @@ class MainView:
         
         # Mostrar vista principal por defecto
         self.show_andon_view()
+        
+    def _on_closing(self):
+        """Maneja el cierre de la ventana"""
+        try:
+            self.controller.shutdown()
+        except:
+            pass
+        finally:
+            self.root.quit()
+            self.root.destroy()
+            # Forzar salida después de destruir la ventana
+            import os
 
     def _setup_styles(self):
         """Configura los estilos de ttk"""
@@ -184,11 +200,19 @@ class MainView:
 
     def _on_proyeccion_click(self):
         """Maneja clic en botón Proyección"""
+        from src.views.proyeccion_view import ProyeccionView
+        
         if self.controller.licencia_controller.puede_configurar_proyeccion:
-            from src.views.proyeccion_view import ProyeccionView
-            ProyeccionView(self.root, self.controller, self.theme, self.falla_controller)
+            # MID/PRO: mostrar diálogo de configuración
+            self._mostrar_dialogo_proyeccion()
         else:
-            self._mostrar_proyeccion_simple()
+            # BASIC: abrir directamente con valores por defecto
+            ProyeccionView(self.root, self.controller, self.theme, self.falla_controller)
+
+    def _mostrar_dialogo_proyeccion(self):
+        """Muestra el diálogo de configuración de proyección (MID/PRO)"""
+        from src.views.proyeccion_config_view import ProyeccionConfigView
+        ProyeccionConfigView(self.root, self.controller, self.theme, self.falla_controller)
 
     def _mostrar_proyeccion_simple(self):
         """Muestra versión simple de proyección"""
@@ -201,10 +225,12 @@ class MainView:
         if not self.controller.licencia_controller.puede_configurar:
             from tkinter import messagebox
             messagebox.showinfo("Acceso Restringido",
-                              "La configuración requiere licencia MID o PRO")
+                            "La configuración requiere licencia MID o PRO")
             return
         
+        # Importar aquí para evitar importación circular
         from src.views.config_view import ConfigView
+        # Crear y mostrar la ventana de configuración
         ConfigView(self.root, self.controller, self.theme, self.falla_controller)
 
     def _on_estadisticas_click(self):

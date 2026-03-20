@@ -45,17 +45,25 @@ class NetworkService:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((self.host, self.port))
         server.listen(200)
+        server.settimeout(1)  # Timeout para poder verificar running
         
         while self.running:
             try:
                 client, addr = server.accept()
                 threading.Thread(target=self._manejador_cliente, 
-                               args=(client, addr), 
-                               daemon=True).start()
+                            args=(client, addr), 
+                            daemon=True).start()
+            except socket.timeout:
+                continue
             except Exception as e:
                 if self.running:
                     logger.error(f"Error en accept: {e}")
                     time.sleep(0.1)
+        
+        try:
+            server.close()
+        except:
+            pass
 
     def _manejador_cliente(self, client_socket, addr):
         """Maneja una conexión de cliente individual"""
