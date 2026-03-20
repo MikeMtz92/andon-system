@@ -48,7 +48,7 @@ class FallaModel:
                 }
                 fallas.append(falla)
             
-            logger.info(f"✅ Cargadas {len(fallas)} fallas activas")
+            logger.info(f"Cargadas {len(fallas)} fallas activas")
         except Exception as e:
             logger.error(f"Error cargando fallas activas: {e}")
             if conn:
@@ -79,7 +79,7 @@ class FallaModel:
                 placeholders = ','.join(['%s'] * len(numeros_a_eliminar))
                 cursor.execute(f"DELETE FROM fallas_activas WHERE numero_falla IN ({placeholders})", 
                              tuple(numeros_a_eliminar))
-                logger.info(f"🗑️ Eliminadas {cursor.rowcount} fallas activas")
+                logger.info(f"Eliminadas {cursor.rowcount} fallas activas")
             
             # Insertar o actualizar
             for falla in fallas_en_memoria:
@@ -132,7 +132,7 @@ class FallaModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"✅ Sincronización completada. {len(fallas_en_memoria)} fallas en memoria")
+            logger.info(f"Sincronización completada. {len(fallas_en_memoria)} fallas en memoria")
             return True
             
         except Exception as e:
@@ -220,7 +220,7 @@ class FallaModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"✅ Falla activa #{numero_falla} eliminada")
+            logger.info(f"Falla activa #{numero_falla} eliminada")
             return True
         except Exception as e:
             logger.error(f"Error eliminando falla activa: {e}")
@@ -300,7 +300,7 @@ class FallaModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"✅ Falla #{alerta.get('numero_falla')} guardada en historial")
+            logger.info(f"Falla #{alerta.get('numero_falla')} guardada en historial")
             return True
             
         except Exception as e:
@@ -341,7 +341,7 @@ class FallaModel:
                     for i in range(min(5, len(FALLAS_DEFAULT)))
                 ]
             
-            logger.info(f"✅ Cargados {len(tipos)} tipos de falla")
+            logger.info(f"Cargados {len(tipos)} tipos de falla")
             return tipos
         except Exception as e:
             logger.error(f"Error cargando tipos: {e}")
@@ -372,7 +372,7 @@ class FallaModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"✅ Guardados {len(tipos)} tipos de falla")
+            logger.info(f"Guardados {len(tipos)} tipos de falla")
             return True
         except Exception as e:
             logger.error(f"Error guardando tipos: {e}")
@@ -400,7 +400,7 @@ class FallaModel:
             for row in rows:
                 mapeo[row[0]] = row[1]
             
-            logger.info(f"✅ Mapeo de botones cargado: {len(mapeo)} reglas")
+            logger.info(f"Mapeo de botones cargado: {len(mapeo)} reglas")
         except Exception as e:
             logger.error(f"Error cargando mapeo: {e}")
             if conn:
@@ -427,7 +427,7 @@ class FallaModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"✅ Mapeo de botones guardado: {len(mapeo_dict)} reglas")
+            logger.info(f"Mapeo de botones guardado: {len(mapeo_dict)} reglas")
             return True
         except Exception as e:
             logger.error(f"Error guardando mapeo: {e}")

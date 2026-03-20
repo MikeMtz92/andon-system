@@ -96,7 +96,7 @@ class AppController:
             computer_name = os.environ.get('COMPUTERNAME', 'unknown')
             self.installation_id = hashlib.md5(computer_name.encode()).hexdigest()[:12].upper()
             
-            logger.info("✅ Controlador principal inicializado")
+            logger.info("Controlador principal inicializado")
             return True
             
         except Exception as e:
@@ -149,7 +149,7 @@ class AppController:
                 threading.Timer(60, actualizar).start()
         
         threading.Timer(60, actualizar).start()
-        logger.info("🔄 Actualización automática iniciada (cada 60s)")
+        logger.info("Actualización automática iniciada (cada 60s)")
 
     def _hubo_cambios(self, viejas, nuevas) -> bool:
         """Compara dos listas de fallas para detectar cambios"""
@@ -185,7 +185,7 @@ class AppController:
 
     def shutdown(self):
         """Cierra la aplicación de forma segura"""
-        logger.info("🔄 Cerrando aplicación...")
+        logger.info("Cerrando aplicación...")
         self.running = False
         
         # Detener servicios
@@ -196,7 +196,7 @@ class AppController:
         if self.falla_controller:
             self.falla_controller.guardar_estado()
         
-        logger.info("✅ Aplicación cerrada")
+        logger.info("Aplicación cerrada")
 
     def get_maquinas_permitidas(self) -> list:
         """Retorna la lista de máquinas según licencia"""

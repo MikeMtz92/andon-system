@@ -23,12 +23,12 @@ class SerialService:
         self.running = True
         self.thread = threading.Thread(target=self._leer_serial, daemon=True)
         self.thread.start()
-        logger.info("🟢 Servicio serial iniciado")
+        logger.info(" Servicio serial iniciado")
 
     def stop(self):
         """Detiene la lectura serial"""
         self.running = False
-        logger.info("🛑 Servicio serial detenido")
+        logger.info("Servicio serial detenido")
 
     def _buscar_puerto(self) -> Optional[str]:
         """Busca un puerto serial compatible con ESP32"""
@@ -41,12 +41,12 @@ class SerialService:
         """Bucle principal de lectura serial"""
         puerto = self._buscar_puerto()
         if not puerto:
-            logger.warning("⚠️ ESP32 no detectado")
+            logger.warning("ESP32 no detectado")
             return
         
         try:
             with serial.Serial(puerto, 115200, timeout=1) as ser:
-                logger.info(f"✅ Conectado a {puerto}")
+                logger.info(f"Conectado a {puerto}")
                 while self.running:
                     try:
                         linea = ser.readline().decode("utf-8").strip()

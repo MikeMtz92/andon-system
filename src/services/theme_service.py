@@ -56,7 +56,7 @@ class ThemeService:
             }
         
         self._actualizar_mapeos()
-        logger.info(f"🎨 Tema cargado: {self.tema_actual}")
+        logger.info(f"Tema cargado: {self.tema_actual}")
 
     def aplicar_tema(self, tema_nombre: str):
         """Aplica un tema predefinido"""
@@ -64,7 +64,7 @@ class ThemeService:
             self.tema_actual = tema_nombre
             self.paleta_actual = TEMAS_PREDEFINIDOS[tema_nombre]["colores"].copy()
             self._actualizar_mapeos()
-            logger.info(f"🎨 Tema aplicado: {tema_nombre}")
+            logger.info(f"Tema aplicado: {tema_nombre}")
             return True
         return False
 
@@ -76,20 +76,33 @@ class ThemeService:
 
     def get_color_para_tipo(self, tipo: str) -> str:
         """Obtiene el color asociado a un tipo de falla"""
+        # 1. Buscar en colores guardados
         tipo_color_key = f"{tipo.lower().replace(' ', '_')}_color"
         
         if tipo_color_key in self.colores:
             return self.colores[tipo_color_key]
         
-        # Fallback a colores base
+        # 2. Buscar en la paleta de colores de tipos (si existe)
+        # Esto debería venir de la base de datos
+        try:
+            from src.models.falla_model import FallaModel
+            # Esto es un poco hacky, pero funciona
+            tipos_data = FallaModel(None).cargar_tipos_falla()
+            for t in tipos_data:
+                if t["nombre"] == tipo:
+                    return t["color"]
+        except:
+            pass
+        
+        # 3. Fallback a colores base
         colores_base = {
-            "mantenimiento": self.colores.get("mantenimiento", "#FF9A00"),
-            "producción": self.colores.get("produccion", "#FF5252"),
-            "produccion": self.colores.get("produccion", "#FF5252"),
-            "calidad": self.colores.get("calidad", "#4CAF50"),
-            "materiales": self.colores.get("materiales", "#2196F3"),
-            "ingeniería": self.colores.get("ingenieria", "#9C27B0"),
-            "ingenieria": self.colores.get("ingenieria", "#9C27B0")
+            "mantenimiento": "#FF9A00",
+            "producción": "#FF5252",
+            "produccion": "#FF5252",
+            "calidad": "#4CAF50",
+            "materiales": "#2196F3",
+            "ingeniería": "#9C27B0",
+            "ingenieria": "#9C27B0"
         }
         
         tipo_lower = tipo.lower()
@@ -97,7 +110,7 @@ class ThemeService:
             if tipo_lower == key:
                 return color
         
-        # Último recurso: color basado en hash
+        # 4. Último recurso: color aleatorio basado en hash
         import hashlib
         hash_obj = hashlib.md5(tipo.encode())
         hash_int = int(hash_obj.hexdigest(), 16)

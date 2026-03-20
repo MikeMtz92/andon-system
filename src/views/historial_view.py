@@ -315,6 +315,10 @@ class HistorialView(tk.Frame):
 
     def actualizar(self):
         """Actualiza la vista (llamado cuando cambian los datos)"""
-        # Recargar tipos por si cambiaron
-        self._cargar_tipos()
-        self.filtro_tipo['values'] = [""] + self.tipos_falla
+        try:
+            # Recargar tipos por si cambiaron
+            self._cargar_tipos()
+            if hasattr(self, 'filtro_tipo') and self.filtro_tipo.winfo_exists():
+                self.filtro_tipo['values'] = [""] + self.tipos_falla
+        except Exception as e:
+            logger.error(f"Error actualizando HistorialView: {e}")

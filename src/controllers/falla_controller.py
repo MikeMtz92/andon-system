@@ -40,7 +40,7 @@ class FallaController:
                 falla["numero_falla"] = self._obtener_siguiente_numero_falla()
             self.numeros_falla_asignados[id(falla)] = falla["numero_falla"]
         
-        logger.info(f"✅ Estado inicial cargado: {len(self.fallas_activas)} fallas activas")
+        logger.info(f"Estado inicial cargado: {len(self.fallas_activas)} fallas activas")
 
     def _obtener_siguiente_numero_falla(self) -> int:
         """Obtiene el siguiente número de falla según la configuración"""
@@ -126,14 +126,14 @@ class FallaController:
             falla["proceso"] = ahora
             falla["estado"] = "en_proceso"
             self.falla_model.guardar_falla_activa(falla)
-            logger.info(f"✅ Falla en proceso: {falla['maquina']} - {falla['tipo']}")
+            logger.info(f"Falla en proceso: {falla['maquina']} - {falla['tipo']}")
             
         elif estado_actual == "en_proceso":
             falla["fin"] = ahora
             falla["estado"] = "resuelta"
             self.falla_model.guardar_falla_en_historial(falla)
             self.fallas_activas.remove(falla)
-            logger.info(f"✅ Falla finalizada: {falla['maquina']} - {falla['tipo']}")
+            logger.info(f"Falla finalizada: {falla['maquina']} - {falla['tipo']}")
             
         elif estado_actual == "pendiente":
             logger.info("Falla pendiente, requiere acción manual")
@@ -152,7 +152,7 @@ class FallaController:
         
         self.falla_model.guardar_falla_activa(nueva_falla)
         self.fallas_activas.append(nueva_falla)
-        logger.info(f"🆕 Nueva falla #{numero_falla}: {maquina} - {tipo}")
+        logger.info(f"Nueva falla #{numero_falla}: {maquina} - {tipo}")
 
     def marcar_en_proceso(self, alerta: Dict):
         """Marca una falla como en proceso manualmente"""
@@ -217,7 +217,7 @@ class FallaController:
         if self.on_fallas_actualizadas:
             self.on_fallas_actualizadas()
         
-        logger.info(f"✅ Cerradas {len(fallas_a_cerrar)} fallas")
+        logger.info(f"Cerradas {len(fallas_a_cerrar)} fallas")
 
     def get_fallas_pendientes(self) -> List[Dict]:
         """Retorna solo las fallas pendientes"""

@@ -36,10 +36,10 @@ class ConfigModel:
         try:
             with open(DB_CONFIG_FILE, 'w') as f:
                 json.dump(config, f, indent=4)
-            logger.info("✅ Configuración de BD guardada")
+            logger.info("Configuración de BD guardada")
             return True
         except Exception as e:
-            logger.error(f"❌ Error guardando config: {e}")
+            logger.error(f"Error guardando config: {e}")
             return False
 
     # ===== CONFIGURACIÓN DEL SISTEMA (MySQL) =====
@@ -135,7 +135,7 @@ class ConfigModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info("✅ Configuración del sistema guardada")
+            logger.info("Configuración del sistema guardada")
             return True
             
         except Exception as e:
@@ -215,7 +215,7 @@ class ConfigModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info("✅ Configuración de proyección guardada")
+            logger.info("Configuración de proyección guardada")
             return True
         except Exception as e:
             logger.error(f"Error guardando config_proyeccion: {e}")
@@ -274,7 +274,7 @@ class ConfigModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info("✅ Configuración de contador guardada")
+            logger.info("Configuración de contador guardada")
             return True
         except Exception as e:
             logger.error(f"Error guardando config_contador: {e}")

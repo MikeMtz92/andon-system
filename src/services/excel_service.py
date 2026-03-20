@@ -87,7 +87,7 @@ class ExcelService:
                 self._agregar_graficas(df, wb)
                 wb.save(file_path)
 
-            logger.info(f"✅ Excel exportado a {file_path}")
+            logger.info(f"Excel exportado a {file_path}")
             return True
 
         except Exception as e:
@@ -193,7 +193,7 @@ class ExcelService:
                          inplace=True)
             
             df.to_excel(file_path, index=False)
-            logger.info(f"✅ Excel simple exportado a {file_path}")
+            logger.info(f"Excel simple exportado a {file_path}")
             return True
             
         except Exception as e:

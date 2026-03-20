@@ -39,10 +39,10 @@ class Database:
                 charset='utf8mb4',
                 collation='utf8mb4_unicode_ci'
             )
-            logger.info("✅ Pool de conexiones MySQL creado")
+            logger.info("Pool de conexiones MySQL creado")
             return True
         except Exception as e:
-            logger.error(f"❌ Error creando pool: {e}")
+            logger.error(f"Error creando pool: {e}")
             self._pool = None
             return False
 

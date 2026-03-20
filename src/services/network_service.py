@@ -32,12 +32,12 @@ class NetworkService:
         self.server_thread = threading.Thread(target=self._servidor_tcp, daemon=True)
         self.server_thread.start()
         
-        logger.info(f"🟢 Servidor de red iniciado en {self.host}:{self.port}")
+        logger.info(f"Servidor de red iniciado en {self.host}:{self.port}")
 
     def stop(self):
         """Detiene el servicio"""
         self.running = False
-        logger.info("🛑 Servicio de red detenido")
+        logger.info("Servicio de red detenido")
 
     def _servidor_tcp(self):
         """Bucle principal del servidor TCP"""
@@ -67,10 +67,10 @@ class NetworkService:
                 try:
                     self.event_queue.put_nowait((maquina.strip(), tipo.strip()))
                 except queue.Full:
-                    logger.warning(f"⚠️ Cola llena, descartando evento de {addr}")
+                    logger.warning(f"Cola llena, descartando evento de {addr}")
             client_socket.close()
         except socket.timeout:
-            logger.debug(f"⏱️ Timeout en conexión de {addr}")
+            logger.debug(f"⏱Timeout en conexión de {addr}")
         except Exception as e:
             logger.error(f"Error con cliente {addr}: {e}")
         finally:

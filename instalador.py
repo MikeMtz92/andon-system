@@ -747,13 +747,23 @@ class InstaladorAndon:
                 print(f"    ❌ Error: {str(e)}")
                 raise
             
-            # 6. Guardar tipos de falla por defecto
+            # 6. Guardar tipos de falla personalizados
             print("\n[6/7] Guardando tipos de falla...")
             try:
                 if self.tipos_falla_instalacion:
-                    falla_model = FallaModel(db)
-                    falla_model.guardar_tipos_falla(self.tipos_falla_instalacion)
-                    print(f"    ✅ {len(self.tipos_falla_instalacion)} tipos de falla guardados")
+                    # Asegurarse de que cada tipo tenga nombre y color
+                    tipos_validos = []
+                    for tipo in self.tipos_falla_instalacion:
+                        if tipo.get("nombre") and tipo.get("color"):
+                            tipos_validos.append(tipo)
+                            print(f"    Guardando: {tipo['nombre']} - {tipo['color']}")
+                    
+                    if tipos_validos:
+                        falla_model = FallaModel(db)
+                        falla_model.guardar_tipos_falla(tipos_validos)
+                        print(f"    ✅ {len(tipos_validos)} tipos de falla guardados con sus colores")
+                    else:
+                        print("    ⚠️ No hay tipos válidos para guardar")
             except Exception as e:
                 print(f"    ❌ Error: {str(e)}")
                 raise

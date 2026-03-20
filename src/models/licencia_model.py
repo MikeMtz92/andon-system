@@ -101,7 +101,7 @@ class LicenciaModel:
             conn.commit()
             cursor.close()
             conn.close()
-            logger.info(f"✅ Licencia guardada: {config.get('license_type')}")
+            logger.info(f"Licencia guardada: {config.get('license_type')}")
             return True
         except Exception as e:
             logger.error(f"Error guardando licencia: {e}")
@@ -114,7 +114,7 @@ class LicenciaModel:
     
     def validar_licencia_online(self, license_key: str, installation_id: str) -> Tuple[bool, any]:
         """Valida la licencia contra el servidor central"""
-        logger.info(f"🔍 Validando licencia: {license_key}")
+        logger.info(f"Validando licencia: {license_key}")
         
         try:
             # Intentar con SSL primero
@@ -202,7 +202,7 @@ class LicenciaModel:
 
     def iniciar_demo(self, installation_id: str) -> Tuple[bool, str]:
         """Inicia un periodo de demo"""
-        logger.info(f"🎁 Iniciando demo para: {installation_id}")
+        logger.info(f"Iniciando demo para: {installation_id}")
         
         try:
             # Obtener IP
@@ -272,7 +272,7 @@ class LicenciaModel:
             conn.commit()
             conn.close()
 
-            logger.info(f"✅ Demo iniciado, expira: {fecha_expiracion}")
+            logger.info(f"Demo iniciado, expira: {fecha_expiracion}")
             return True, fecha_expiracion
 
         except Exception as e:
@@ -283,7 +283,7 @@ class LicenciaModel:
     
     def verificar_estado_licencia(self, config: dict) -> Tuple[bool, any]:
         """Verifica el estado de la licencia"""
-        logger.info("🔍 Verificando estado de licencia...")
+        logger.info("Verificando estado de licencia...")
         
         hoy = datetime.now()
 
@@ -293,11 +293,11 @@ class LicenciaModel:
                 try:
                     expiracion = datetime.strptime(config['expires_at'], "%Y-%m-%d")
                     if hoy.date() > expiracion.date():
-                        logger.warning("❌ Licencia expirada")
+                        logger.warning("Licencia expirada")
                         return False, "Licencia expirada"
                 except:
                     pass
-            logger.info(f"✅ Licencia {config['license_type'].upper()} válida")
+            logger.info(f"Licencia {config['license_type'].upper()} válida")
             return True, config
 
         # Demo
@@ -305,15 +305,15 @@ class LicenciaModel:
             try:
                 demo_expira = datetime.strptime(config['demo_expires'], "%Y-%m-%d")
                 if hoy.date() <= demo_expira.date():
-                    logger.info("✅ Demo activa")
+                    logger.info(" Demo activa")
                     return True, config
                 else:
-                    logger.warning("❌ Demo expirada")
+                    logger.warning(" Demo expirada")
                     return False, "Periodo de demo expirado"
             except:
                 return False, "Error en fecha de demo"
 
         # Básico por defecto
         else:
-            logger.info("ℹ️ Modo básico activado")
+            logger.info("Modo básico activado")
             return True, config

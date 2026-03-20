@@ -141,14 +141,23 @@ class AndonView(tk.Frame):
 
     def _cargar_tipos_falla(self):
         """Carga los tipos de falla desde el controlador"""
-        from src.models.falla_model import FallaModel
-        tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
-        self.tipos_falla = [t["nombre"] for t in tipos_data]
-        
-        # Limitar según licencia
-        max_tipos = self.controller.licencia_controller.max_tipos_falla
-        if len(self.tipos_falla) > max_tipos:
-            self.tipos_falla = self.tipos_falla[:max_tipos]
+        try:
+            tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
+            if tipos_data:
+                self.tipos_falla = [t["nombre"] for t in tipos_data]
+                print(f"Tipos cargados: {self.tipos_falla}")  # Debug
+            else:
+                print("No se encontraron tipos, usando valores por defecto")
+                self.tipos_falla = ["Mantenimiento", "Producción", "Calidad"]
+            
+            # Limitar según licencia
+            max_tipos = self.controller.licencia_controller.max_tipos_falla
+            if len(self.tipos_falla) > max_tipos:
+                self.tipos_falla = self.tipos_falla[:max_tipos]
+                
+        except Exception as e:
+            print(f"Error cargando tipos: {e}")
+            self.tipos_falla = ["Mantenimiento", "Producción", "Calidad"]
 
     def _actualizar_botones_tipos(self):
         """Actualiza los botones de tipos de falla en registro rápido"""
@@ -157,21 +166,49 @@ class AndonView(tk.Frame):
 
         for tipo in self.tipos_falla:
             color = self.theme.get_color_para_tipo(tipo)
+            print(f"Botón {tipo} color: {color}")  # Debug
+            
+            # Determinar color del texto
+            texto_color = "#000000" if self._is_light_color(color) else "#FFFFFF"
+            
             btn = tk.Button(self.tipos_frame,
-                          text=tipo,
-                          command=lambda t=tipo: self._on_registro_manual(t),
-                          bg=color,
-                          fg="#000000" if is_light_color(color) else "#FFFFFF",
-                          font=("Segoe UI", 9, "bold"),
-                          relief="flat",
-                          padx=15,
-                          pady=8,
-                          cursor="hand2")
+                        text=tipo,
+                        command=lambda t=tipo: self._on_registro_manual(t),
+                        bg=color,
+                        fg=texto_color,
+                        font=("Segoe UI", 9, "bold"),
+                        relief="flat",
+                        padx=15,
+                        pady=8,
+                        cursor="hand2")
             btn.pack(side="left", padx=5)
             btn.bind("<Enter>", lambda e, b=btn, c=color: 
-                    b.config(bg=lighten_color(c, 0.1)))
+                    b.config(bg=self._lighten_color(c, 0.1)))
             btn.bind("<Leave>", lambda e, b=btn, c=color: 
                     b.config(bg=c))
+            
+    def _is_light_color(self, color):
+        """Determina si un color es claro"""
+        if color.startswith('#'):
+            color = color.lstrip('#')
+            rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+        else:
+            rgb = color
+        luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
+        return luminance > 0.5
+
+    def _lighten_color(self, color, factor=0.2):
+        """Aclara un color"""
+        from colorsys import rgb_to_hls, hls_to_rgb
+        if color.startswith('#'):
+            color = color.lstrip('#')
+            rgb = tuple(int(color[i:i+2], 16) for i in (0, 2, 4))
+        else:
+            rgb = color
+        h, l, s = rgb_to_hls(rgb[0]/255.0, rgb[1]/255.0, rgb[2]/255.0)
+        l = min(1.0, l + factor)
+        r, g, b = hls_to_rgb(h, l, s)
+        return f'#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}'
 
     def _actualizar_botones_pendientes(self):
         """Actualiza la visibilidad de botones de pendientes según licencia"""
@@ -446,7 +483,7 @@ class AndonView(tk.Frame):
         elif estado == "pendiente":
             if menu.index("end") is not None:
                 menu.add_separator()
-            menu.add_command(label="✅ Resolver Pendiente", 
+            menu.add_command(label="Resolver Pendiente", 
                            command=lambda: self.falla_controller.finalizar_falla(alerta))
 
         if menu.index("end") is not None:
@@ -491,7 +528,7 @@ class AndonView(tk.Frame):
 
         if respuesta:
             self.falla_controller.cerrar_todas_fallas()
-            messagebox.showinfo("✅ Completado", "Todas las fallas cerradas")
+            messagebox.showinfo("Completado", "Todas las fallas cerradas")
 
     def _on_actualizar_manual(self):
         """Actualiza manualmente desde BD"""
@@ -499,7 +536,7 @@ class AndonView(tk.Frame):
         self.falla_controller.fallas_activas = nuevas
         self.actualizar_tabla()
         self.update_stats()
-        messagebox.showinfo("✅ Actualizado", 
+        messagebox.showinfo("Actualizado", 
                           f"Se cargaron {len(nuevas)} fallas activas")
 
     def _reproducir_alarma(self):

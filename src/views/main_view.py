@@ -20,7 +20,7 @@ class MainView:
         self.root.geometry("1400x800")
         self.root.configure(bg=self.theme.colores["fondo"])
         
-        # Vistas
+        # Vistas - las crearemos bajo demanda
         self.current_view = None
         self.andon_view = None
         self.historial_view = None
@@ -145,31 +145,42 @@ class MainView:
         from src.views.andon_view import AndonView
         
         self.header_label.config(text="Panel de Control Andon")
-        self._clear_content()
         
-        if not self.andon_view:
+        # Ocultar vista actual si existe
+        if self.current_view:
+            self.current_view.pack_forget()
+        
+        # Crear vista si no existe
+        if not self.andon_view or not self.andon_view.winfo_exists():
             self.andon_view = AndonView(self.content_area, self.controller, 
                                        self.theme, self.falla_controller)
+        
+        # Mostrar vista
         self.andon_view.pack(fill="both", expand=True)
         self.current_view = self.andon_view
+        
+        # Actualizar datos
+        self.andon_view.actualizar_tabla()
+        self.andon_view.update_stats()
 
     def show_historial_view(self):
         """Muestra la vista de Historial"""
         from src.views.historial_view import HistorialView
         
         self.header_label.config(text="Historial de Fallas")
-        self._clear_content()
         
-        if not self.historial_view:
+        # Ocultar vista actual si existe
+        if self.current_view:
+            self.current_view.pack_forget()
+        
+        # Crear vista si no existe
+        if not self.historial_view or not self.historial_view.winfo_exists():
             self.historial_view = HistorialView(self.content_area, self.controller,
                                               self.theme, self.falla_controller)
+        
+        # Mostrar vista
         self.historial_view.pack(fill="both", expand=True)
         self.current_view = self.historial_view
-
-    def _clear_content(self):
-        """Limpia el área de contenido"""
-        for widget in self.content_area.winfo_children():
-            widget.destroy()
 
     def _on_proyeccion_click(self):
         """Maneja clic en botón Proyección"""
@@ -177,17 +188,13 @@ class MainView:
             from src.views.proyeccion_view import ProyeccionView
             ProyeccionView(self.root, self.controller, self.theme, self.falla_controller)
         else:
-            # Versión simple
             self._mostrar_proyeccion_simple()
 
     def _mostrar_proyeccion_simple(self):
         """Muestra versión simple de proyección"""
-        ventana = tk.Toplevel(self.root)
-        ventana.title(f"{self.theme.colores.get('nombre_sistema', 'ANDON SYSTEM')} - Vista de Proyección")
-        ventana.configure(bg="black")
-        ventana.geometry("800x600")
-        
-        # Aquí iría el código de la proyección simple (lo moveremos después)
+        from src.views.proyeccion_view import ProyeccionView
+        # Usar la misma vista pero con configuración por defecto
+        ProyeccionView(self.root, self.controller, self.theme, self.falla_controller)
 
     def _on_configuracion_click(self):
         """Maneja clic en botón Configuración"""
@@ -223,7 +230,15 @@ class MainView:
 
     def actualizar_fallas(self):
         """Actualiza todas las vistas cuando cambian las fallas"""
-        if self.andon_view and hasattr(self.andon_view, 'actualizar_tabla'):
-            self.andon_view.actualizar_tabla()
-        if self.historial_view and hasattr(self.historial_view, 'actualizar'):
-            self.historial_view.actualizar()
+        try:
+            if self.andon_view and self.andon_view.winfo_exists():
+                self.andon_view.actualizar_tabla()
+                self.andon_view.update_stats()
+        except Exception as e:
+            logger.error(f"Error actualizando AndonView: {e}")
+        
+        try:
+            if self.historial_view and self.historial_view.winfo_exists():
+                self.historial_view.actualizar()
+        except Exception as e:
+            logger.error(f"Error actualizando HistorialView: {e}")

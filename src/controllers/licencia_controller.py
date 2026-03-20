@@ -105,7 +105,7 @@ class LicenciaController:
             self.puede_filtrar_tipos_graficas = True
             self.puede_ajustar_periodo_estadisticas = True
 
-        logger.info(f"✅ Límites aplicados para licencia {tipo}")
+        logger.info(f"Límites aplicados para licencia {tipo}")
 
     def verificar_limite_maquina(self, maquina: str) -> bool:
         """Verifica si una máquina está dentro del límite"""
