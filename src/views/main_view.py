@@ -32,8 +32,12 @@ class MainView:
         self._setup_ui()
         self._setup_styles()
         
+        if hasattr(controller, '_reproducir_alarma'):
+            controller.falla_controller.on_alarma = controller._reproducir_alarma
+        
         # Mostrar vista principal por defecto
         self.show_andon_view()
+        
         
     def _on_closing(self):
         """Maneja el cierre de la ventana"""
@@ -208,6 +212,14 @@ class MainView:
         else:
             # BASIC: abrir directamente con valores por defecto
             ProyeccionView(self.root, self.controller, self.theme, self.falla_controller)
+            
+    def actualizar_estadisticas(self):
+        """Actualiza las estadísticas en todas las vistas"""
+        try:
+            if self.andon_view and self.andon_view.winfo_exists():
+                self.andon_view.update_stats()
+        except Exception as e:
+            logger.error(f"Error actualizando estadísticas: {e}")
 
     def _mostrar_dialogo_proyeccion(self):
         """Muestra el diálogo de configuración de proyección (MID/PRO)"""

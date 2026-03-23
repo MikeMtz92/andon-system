@@ -2,7 +2,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from src.utils.helpers import lighten_color
+from src.utils.helpers import lighten_color, is_light_color
 
 class ModernButton(tk.Button):
     def __init__(self, master=None, theme_service=None, **kwargs):
@@ -28,6 +28,7 @@ class ModernButton(tk.Button):
     def on_leave(self, e):
         self.config(bg=self.original_bg if hasattr(self, 'original_bg') else self.theme.colores.get("accento", "#e94560"))
 
+
 class ModernEntry(tk.Entry):
     def __init__(self, master=None, theme_service=None, **kwargs):
         super().__init__(master, **kwargs)
@@ -43,6 +44,7 @@ class ModernEntry(tk.Entry):
             highlightthickness=1,
             font=("Segoe UI", 10)
         )
+
 
 class ModernCombobox(ttk.Combobox):
     def __init__(self, master=None, theme_service=None, **kwargs):
@@ -64,3 +66,14 @@ class ModernCombobox(ttk.Combobox):
                   fieldbackground=[('readonly', self.theme.colores.get("superficie3", "#2d3047"))],
                   selectbackground=[('readonly', self.theme.colores.get("accento", "#e94560"))],
                   selectforeground=[('readonly', self.theme.colores.get("texto", "#ffffff"))])
+
+
+class ModernFrame(tk.Frame):
+    """Frame moderno que se adapta al tema actual"""
+    def __init__(self, master=None, theme_service=None, **kwargs):
+        super().__init__(master, **kwargs)
+        self.theme = theme_service
+        if self.theme:
+            self.config(bg=self.theme.colores.get("fondo", "#1a1a2e"))
+        else:
+            self.config(bg="#1a1a2e")

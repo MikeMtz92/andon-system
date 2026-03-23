@@ -16,9 +16,11 @@ class AndonView(tk.Frame):
     
     def __init__(self, parent, controller, theme_service, falla_controller):
         super().__init__(parent, bg=theme_service.colores["fondo"])
+        self.root = parent
         self.controller = controller
         self.theme = theme_service
         self.falla_controller = falla_controller
+        self.stats_widgets = {}
         
         # Variables
         self.tipos_falla = []
@@ -110,6 +112,9 @@ class AndonView(tk.Frame):
         # Contenedor de estadísticas
         self.stats_container = tk.Frame(stats_frame, bg=self.theme.colores["card"])
         self.stats_container.pack(fill="x", padx=20, pady=(5, 15))
+        
+        # Crear widgets de estadísticas
+        self._crear_widgets_estadisticas()
 
         # Contador de fallas
         counter_frame = tk.Frame(stats_frame, bg=self.theme.colores["card"])
@@ -366,27 +371,67 @@ class AndonView(tk.Frame):
         )
 
     def update_stats(self):
-        """Actualiza las estadísticas en tiempo real"""
-        if not self.stats_container.winfo_exists():
+        """Actualiza las estadísticas en tiempo real (sin recrear widgets)"""
+        if not self.stats_container or not self.stats_container.winfo_exists():
             return
 
+        # Obtener estadísticas reales
+        stats = self.falla_controller.get_estadisticas()
+        
+        # Obtener datos de la BD
+        resueltas_hoy = self._get_resueltas_hoy()
+        tiempo_promedio = self._get_tiempo_promedio()
+        
+        # Si no hay widgets creados aún, crearlos
+        if not hasattr(self, 'stats_widgets') or not self.stats_widgets:
+            self._crear_widgets_estadisticas()
+        
+        # Actualizar los valores existentes
+        try:
+            # Actualizar Fallas Activas
+            self.stats_widgets["activas"].config(text=str(stats["activas"]))
+            
+            # Actualizar En Proceso
+            self.stats_widgets["en_proceso"].config(text=str(stats["en_proceso"]))
+            
+            # Actualizar Resueltas Hoy
+            self.stats_widgets["resueltas_hoy"].config(text=str(resueltas_hoy))
+            
+            # Actualizar Tiempo Promedio
+            self.stats_widgets["tiempo_promedio"].config(text=f"{tiempo_promedio:.1f} min")
+            
+            # Actualizar contador de fallas
+            if self.contador_fallas and self.contador_fallas.winfo_exists():
+                self.contador_fallas.config(text=f"{stats['activas']} activas")
+                
+        except Exception as e:
+            print(f"Error actualizando estadísticas: {e}")
+            # Si hay error, recrear widgets
+            self._crear_widgets_estadisticas()
+            
+    def _crear_widgets_estadisticas(self):
+        """Crea los widgets de estadísticas por primera vez"""
         # Limpiar contenedor
         for widget in self.stats_container.winfo_children():
             widget.destroy()
-
+        
+        # Crear diccionario para almacenar referencias
+        self.stats_widgets = {}
+        
+        # Obtener datos actuales
         stats = self.falla_controller.get_estadisticas()
-        stats.update({
-            "Resueltas Hoy": self._get_resueltas_hoy(),
-            "Tiempo Promedio": f"{self._get_tiempo_promedio():.1f} min"
-        })
-
-        # Crear tarjetas de estadísticas
-        for label, value in [
-            ("Fallas Activas", stats["activas"]),
-            ("En Proceso", stats["en_proceso"]),
-            ("Resueltas Hoy", stats["Resueltas Hoy"]),
-            ("Tiempo Promedio", stats["Tiempo Promedio"])
-        ]:
+        resueltas_hoy = self._get_resueltas_hoy()
+        tiempo_promedio = self._get_tiempo_promedio()
+        
+        # Definir las estadísticas
+        stat_items = [
+            ("activas", "Fallas Activas", stats["activas"]),
+            ("en_proceso", "En Proceso", stats["en_proceso"]),
+            ("resueltas_hoy", "Resueltas Hoy", resueltas_hoy),
+            ("tiempo_promedio", "Tiempo Promedio", f"{tiempo_promedio:.1f} min")
+        ]
+        
+        for key, label, value in stat_items:
             card = tk.Frame(
                 self.stats_container,
                 bg=lighten_color(self.theme.colores["card"], -0.1),
@@ -395,15 +440,18 @@ class AndonView(tk.Frame):
                 highlightbackground=self.theme.colores["texto_secundario"]
             )
             card.pack(side="left", fill="both", expand=True, padx=5)
-
-            tk.Label(
+            
+            # Valor (se actualizará después)
+            value_label = tk.Label(
                 card,
                 text=str(value),
                 bg=lighten_color(self.theme.colores["card"], -0.1),
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 18, "bold")
-            ).pack(pady=(15, 5))
-
+            )
+            value_label.pack(pady=(15, 5))
+            
+            # Etiqueta
             tk.Label(
                 card,
                 text=label,
@@ -411,22 +459,60 @@ class AndonView(tk.Frame):
                 fg=self.theme.colores["texto_secundario"],
                 font=("Segoe UI", 9)
             ).pack(pady=(0, 15))
-
+            
+            # Guardar referencia
+            self.stats_widgets[key] = value_label
+        
     def _get_resueltas_hoy(self) -> int:
-        """Obtiene fallas resueltas hoy (implementación simplificada)"""
-        # En una versión completa, esto consultaría la BD
-        return 0
+        """Obtiene fallas resueltas hoy desde la BD"""
+        try:
+            conn = self.controller.db.get_connection()
+            if not conn:
+                print("No se pudo conectar a MySQL")
+                return 0
+            
+            cursor = conn.cursor()
+            hoy = datetime.now().strftime("%Y-%m-%d")
+            cursor.execute("SELECT COUNT(*) FROM fallas WHERE DATE(fin) = %s", (hoy,))
+            count = cursor.fetchone()[0] or 0
+            cursor.close()
+            conn.close()
+            return count
+        except Exception as e:
+            print(f"Error obteniendo resueltas hoy: {e}")
+            return 0
 
     def _get_tiempo_promedio(self) -> float:
-        """Obtiene tiempo promedio de resolución"""
-        return 0
+        """Obtiene tiempo promedio de resolución desde la BD"""
+        try:
+            conn = self.controller.db.get_connection()
+            if not conn:
+                return 0
+            
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT AVG(TIMESTAMPDIFF(MINUTE, inicio, fin))
+                FROM fallas
+                WHERE fin IS NOT NULL
+            """)
+            resultado = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+            
+            if resultado is not None:
+                return float(resultado)
+            return 0
+        except Exception as e:
+            print(f"Error obteniendo tiempo promedio: {e}")
+            return 0
 
     def _on_registro_manual(self, tipo: str):
         """Maneja clic en botón de tipo de falla"""
         maquina = self.entrada_maquina.get().strip()
         if maquina:
             self.falla_controller.registrar_evento(maquina, tipo)
-            self._reproducir_alarma()
+            self.actualizar_tabla()
+            self.update_stats()
         else:
             messagebox.showwarning("Aviso", "Selecciona una máquina")
 
@@ -483,33 +569,381 @@ class AndonView(tk.Frame):
         elif estado == "pendiente":
             if menu.index("end") is not None:
                 menu.add_separator()
-            menu.add_command(label="Resolver Pendiente", 
-                           command=lambda: self.falla_controller.finalizar_falla(alerta))
+            menu.add_command(label="✅ Resolver Pendiente",  # <-- Agregar emoji ✅
+                        command=lambda: self.falla_controller.finalizar_falla(alerta))
 
         if menu.index("end") is not None:
             try:
                 menu.tk_popup(event.x_root, event.y_root)
             finally:
                 menu.grab_release()
+                
+    def _mostrar_nota_pendiente(self, alerta):
+        """Muestra la nota completa de una falla pendiente"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Nota de Falla Pendiente")
+        dialog.geometry("500x400")
+        dialog.configure(bg=self.theme.colores["fondo"])
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Centrar
+        dialog.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (500 // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (400 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        tk.Label(dialog,
+                text="📋 Detalle de Falla Pendiente",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 16, "bold")).pack(pady=20)
+        
+        info_frame = tk.Frame(dialog, bg=self.theme.colores["card"])
+        info_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(info_frame,
+                text=f"Máquina: {alerta['maquina']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=5)
+        
+        tk.Label(info_frame,
+                text=f"Tipo: {alerta['tipo']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=5)
+        
+        if "fecha_pendiente" in alerta:
+            tk.Label(info_frame,
+                    text=f"Fecha: {alerta['fecha_pendiente']}",
+                    bg=self.theme.colores["card"],
+                    fg=self.theme.colores["texto_secundario"],
+                    font=("Segoe UI", 10)).pack(anchor="w", padx=10, pady=5)
+        
+        tk.Label(dialog,
+                text="Nota:",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(pady=(20, 5))
+        
+        texto_nota = tk.Text(dialog,
+                            height=8,
+                            width=50,
+                            bg=self.theme.colores.get("superficie3", "#2d3047"),
+                            fg=self.theme.colores["texto"],
+                            font=("Segoe UI", 10),
+                            wrap="word")
+        texto_nota.pack(padx=20, pady=5)
+        texto_nota.insert("1.0", alerta["nota_pendiente"])
+        texto_nota.config(state="disabled")
+        
+        btn_frame = tk.Frame(dialog, bg=self.theme.colores["fondo"])
+        btn_frame.pack(pady=20)
+        
+        def resolver():
+            dialog.destroy()
+            self.falla_controller.finalizar_falla(alerta)
+        
+        tk.Button(btn_frame,
+                text="✅ Marcar como Resuelta",
+                bg=self.theme.colores["success"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 10, "bold"),
+                relief="flat",
+                padx=15,
+                pady=8,
+                cursor="hand2",
+                command=resolver).pack(side="left", padx=5)
+        
+        tk.Button(btn_frame,
+                text="✏️ Editar Nota",
+                bg=self.theme.colores["warning"],
+                fg=self.theme.colores["negro"],
+                font=("Segoe UI", 10),
+                relief="flat",
+                padx=15,
+                pady=8,
+                cursor="hand2",
+                command=lambda: [dialog.destroy(), self._editar_nota(alerta)]).pack(side="left", padx=5)
+        
+        tk.Button(btn_frame,
+                text="❌ Cerrar",
+                bg=self.theme.colores["danger"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 10),
+                relief="flat",
+                padx=15,
+                pady=8,
+                cursor="hand2",
+                command=dialog.destroy).pack(side="left", padx=5)
 
     def _mostrar_nota(self, alerta):
         """Muestra la nota de una falla"""
-        from tkinter import messagebox
-        messagebox.showinfo("Nota de Falla",
-                          f"Máquina: {alerta['maquina']}\n"
-                          f"Tipo: {alerta['tipo']}\n\n"
-                          f"Nota:\n{alerta.get('nota_pendiente', '')}")
+        if alerta.get("estado") == "pendiente":
+            self._mostrar_nota_pendiente(alerta)
+        else:
+            messagebox.showinfo("Nota de Falla",
+                            f"Máquina: {alerta['maquina']}\n"
+                            f"Tipo: {alerta['tipo']}\n\n"
+                            f"Nota:\n{alerta.get('nota_pendiente', '')}")
 
     def _editar_nota(self, alerta):
         """Abre diálogo para editar nota"""
-        # Implementación similar a mostrar_dialogo_nota original
-        pass
+        self._mostrar_dialogo_nota(alerta)
 
     def _marcar_pendiente(self, alerta):
         """Marca una falla como pendiente"""
-        # Implementación similar a mostrar_dialogo_nota_pendiente original
-        pass
-
+        if not self.controller.licencia_controller.puede_usar_pendientes:
+            messagebox.showinfo("Acceso Restringido",
+                            "Las fallas pendientes son una característica\n"
+                            "disponible solo en licencias MID y PRO.",
+                            parent=self.root)
+            return
+        
+        # Crear diálogo para la nota
+        self._mostrar_dialogo_nota_pendiente(alerta)
+        
+    def _mostrar_dialogo_nota_pendiente(self, alerta):
+        """Muestra un diálogo para agregar nota a una falla pendiente"""
+        # Obtener la ventana raíz
+        root_window = self.root
+        
+        dialog = tk.Toplevel(root_window)
+        dialog.title("Nota de Falla Pendiente")
+        dialog.geometry("500x450")
+        dialog.configure(bg=self.theme.colores["fondo"])
+        dialog.transient(root_window)
+        dialog.grab_set()
+        
+        # Centrar diálogo
+        dialog.update_idletasks()
+        x = root_window.winfo_x() + (root_window.winfo_width() // 2) - (500 // 2)
+        y = root_window.winfo_y() + (root_window.winfo_height() // 2) - (450 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Título
+        tk.Label(dialog,
+                text="📝 Marcar como Pendiente",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 16, "bold")).pack(pady=20)
+        
+        # Información de la falla
+        info_frame = tk.Frame(dialog, bg=self.theme.colores["card"])
+        info_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(info_frame,
+                text=f"Máquina: {alerta['maquina']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=5)
+        
+        tk.Label(info_frame,
+                text=f"Tipo: {alerta['tipo']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=5)
+        
+        # Área de nota
+        tk.Label(dialog,
+                text="Nota / Motivo del pendiente:",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(pady=(20, 5))
+        
+        texto_nota = tk.Text(dialog,
+                            height=8,
+                            width=50,
+                            bg=self.theme.colores.get("superficie3", "#2d3047"),
+                            fg=self.theme.colores["texto"],
+                            font=("Segoe UI", 10),
+                            wrap="word")
+        texto_nota.pack(padx=20, pady=5)
+        
+        # Si ya existe una nota, mostrarla
+        if "nota_pendiente" in alerta and alerta["nota_pendiente"]:
+            texto_nota.insert("1.0", alerta["nota_pendiente"])
+        
+        # Frame para botones
+        btn_frame = tk.Frame(dialog, bg=self.theme.colores["fondo"])
+        btn_frame.pack(pady=20)
+        
+        def guardar_nota():
+            nota = texto_nota.get("1.0", tk.END).strip()
+            if nota:
+                # Actualizar la falla
+                alerta["nota_pendiente"] = nota
+                alerta["estado"] = "pendiente"
+                alerta["fecha_pendiente"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                
+                # Guardar en BD
+                self.falla_controller.falla_model.guardar_falla_activa(alerta)
+                
+                # Actualizar vistas
+                self.actualizar_tabla()
+                self.update_stats()
+                
+                # Actualizar proyección si está abierta
+                if hasattr(self.controller, 'main_view') and self.controller.main_view:
+                    if hasattr(self.controller.main_view, 'proyeccion_view'):
+                        self.controller.main_view.proyeccion_view._actualizar_tabla()
+                
+                dialog.destroy()
+                messagebox.showinfo("✅ Nota Guardada", 
+                                "La falla ha sido marcada como pendiente.",
+                                parent=root_window)
+            else:
+                messagebox.showwarning("Aviso", 
+                                    "Debes agregar una nota explicativa.", 
+                                    parent=dialog)
+        
+        tk.Button(btn_frame,
+                text="💾 Guardar y Marcar Pendiente",
+                bg=self.theme.colores["warning"],
+                fg=self.theme.colores["negro"],
+                font=("Segoe UI", 11, "bold"),
+                relief="flat",
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=guardar_nota).pack(side="left", padx=5)
+        
+        tk.Button(btn_frame,
+                text="❌ Cancelar",
+                bg=self.theme.colores["danger"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11),
+                relief="flat",
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=dialog.destroy).pack(side="left", padx=5)
+        
+    def _mostrar_dialogo_nota(self, alerta):
+        """Muestra un diálogo para agregar/editar nota a cualquier falla (solo PRO)"""
+        if not self.controller.licencia_controller.puede_agregar_notas:
+            messagebox.showinfo("Acceso Restringido",
+                            "Agregar notas solo está disponible\n"
+                            "en licencias PRO.",
+                            parent=self.root)
+            return
+        
+        root_window = self.root
+        
+        dialog = tk.Toplevel(root_window)
+        dialog.title("Nota de Falla")
+        dialog.geometry("500x450")
+        dialog.configure(bg=self.theme.colores["fondo"])
+        dialog.transient(root_window)
+        dialog.grab_set()
+        
+        # Centrar diálogo
+        dialog.update_idletasks()
+        x = root_window.winfo_x() + (root_window.winfo_width() // 2) - (500 // 2)
+        y = root_window.winfo_y() + (root_window.winfo_height() // 2) - (450 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Título
+        tk.Label(dialog,
+                text="📝 Agregar/Editar Nota",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 16, "bold")).pack(pady=20)
+        
+        # Información de la falla
+        info_frame = tk.Frame(dialog, bg=self.theme.colores["card"])
+        info_frame.pack(fill="x", padx=20, pady=10)
+        
+        estado_text = ""
+        if alerta.get("estado") == "pendiente":
+            estado_text = " (Pendiente)"
+        
+        tk.Label(info_frame,
+                text=f"Máquina: {alerta['maquina']}{estado_text}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=5)
+        
+        tk.Label(info_frame,
+                text=f"Tipo: {alerta['tipo']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=5)
+        
+        # Área de nota
+        tk.Label(dialog,
+                text="Nota:",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(pady=(20, 5))
+        
+        texto_nota = tk.Text(dialog,
+                            height=8,
+                            width=50,
+                            bg=self.theme.colores.get("superficie3", "#2d3047"),
+                            fg=self.theme.colores["texto"],
+                            font=("Segoe UI", 10),
+                            wrap="word")
+        texto_nota.pack(padx=20, pady=5)
+        
+        # Si ya existe una nota, mostrarla
+        if "nota_pendiente" in alerta and alerta["nota_pendiente"]:
+            texto_nota.insert("1.0", alerta["nota_pendiente"])
+        
+        # Frame para botones
+        btn_frame = tk.Frame(dialog, bg=self.theme.colores["fondo"])
+        btn_frame.pack(pady=20)
+        
+        def guardar_nota():
+            nota = texto_nota.get("1.0", tk.END).strip()
+            if nota:
+                alerta["nota_pendiente"] = nota
+                # No cambiar el estado, solo agregar nota
+                
+                # Guardar en BD
+                self.falla_controller.falla_model.guardar_falla_activa(alerta)
+                
+                # Actualizar vistas
+                self.actualizar_tabla()
+                self.update_stats()
+                
+                # Actualizar proyección si está abierta
+                if hasattr(self.controller, 'main_view') and self.controller.main_view:
+                    if hasattr(self.controller.main_view, 'proyeccion_view'):
+                        self.controller.main_view.proyeccion_view._actualizar_tabla()
+                
+                dialog.destroy()
+                messagebox.showinfo("✅ Nota Guardada", 
+                                "Nota agregada correctamente.",
+                                parent=root_window)
+            else:
+                messagebox.showwarning("Aviso", 
+                                    "La nota no puede estar vacía.", 
+                                    parent=dialog)
+        
+        tk.Button(btn_frame,
+                text="💾 Guardar Nota",
+                bg=self.theme.colores["success"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold"),
+                relief="flat",
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=guardar_nota).pack(side="left", padx=5)
+        
+        tk.Button(btn_frame,
+                text="❌ Cancelar",
+                bg=self.theme.colores["danger"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11),
+                relief="flat",
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=dialog.destroy).pack(side="left", padx=5)
+    
     def _on_ver_pendientes(self):
         """Muestra ventana con fallas pendientes"""
         from src.views.pendientes_view import PendientesView

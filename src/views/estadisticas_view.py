@@ -56,16 +56,16 @@ class EstadisticasView:
         self.notebook.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
         # Crear pestañas
-        self.tab_resumen = ModernFrame(self.notebook, bg=self.theme.colores["fondo"])
+        self.tab_resumen = tk.Frame(self.notebook, bg=self.theme.colores["fondo"])
         self.notebook.add(self.tab_resumen, text="📊 Resumen General")
         
-        self.tab_tendencias = ModernFrame(self.notebook, bg=self.theme.colores["fondo"])
+        self.tab_tendencias = ModernFrame(self.notebook, theme_service=self.theme)
         self.notebook.add(self.tab_tendencias, text="📈 Tendencias")
-        
-        self.tab_metricas = ModernFrame(self.notebook, bg=self.theme.colores["fondo"])
+
+        self.tab_metricas = ModernFrame(self.notebook, theme_service=self.theme)
         self.notebook.add(self.tab_metricas, text="🔧 Métricas por Tipo")
-        
-        self.tab_maquinas = ModernFrame(self.notebook, bg=self.theme.colores["fondo"])
+
+        self.tab_maquinas = ModernFrame(self.notebook, theme_service=self.theme)
         self.notebook.add(self.tab_maquinas, text="⚙️ Análisis de Máquinas")
         
         # Cargar datos iniciales

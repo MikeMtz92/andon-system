@@ -25,6 +25,8 @@ class FallaController:
         
         # Callbacks para actualizar vistas
         self.on_fallas_actualizadas: Optional[Callable] = None
+        self.on_estadisticas_actualizadas: Optional[Callable] = None
+        self.on_alarma: Optional[Callable] = None
         
         # Configuración del contador
         self.config_contador = self.config_model.cargar_config_contador()
@@ -141,6 +143,12 @@ class FallaController:
             self.falla_model.guardar_falla_activa(falla)
             logger.info(f"Falla en proceso: {falla['maquina']} - {falla['tipo']}")
             
+            # Notificar cambios
+            if self.on_fallas_actualizadas:
+                self.on_fallas_actualizadas()
+            if self.on_estadisticas_actualizadas:
+                self.on_estadisticas_actualizadas()
+            
         elif estado_actual == "en_proceso":
             falla["fin"] = ahora
             falla["estado"] = "resuelta"
@@ -161,12 +169,18 @@ class FallaController:
                         break
                 
                 logger.info(f"Falla finalizada: {falla['maquina']} - {falla['tipo']}")
+                
+                # Notificar cambios
+                if self.on_fallas_actualizadas:
+                    self.on_fallas_actualizadas()
+                if self.on_estadisticas_actualizadas:
+                    self.on_estadisticas_actualizadas()
             else:
                 logger.error(f"Error al guardar falla finalizada en historial")
                 
         elif estado_actual == "pendiente":
             logger.info("Falla pendiente, requiere acción manual")
-    
+        
     def _crear_nueva_falla(self, maquina: str, tipo: str, ahora: str):
         """Crea una nueva falla"""
         numero_falla = self._obtener_siguiente_numero_falla()
@@ -182,6 +196,16 @@ class FallaController:
         self.falla_model.guardar_falla_activa(nueva_falla)
         self.fallas_activas.append(nueva_falla)
         logger.info(f"Nueva falla #{numero_falla}: {maquina} - {tipo}")
+        
+        # Reproducir alarma para nueva falla
+        if self.on_alarma:
+            self.on_alarma()
+        
+        # Notificar cambios
+        if self.on_fallas_actualizadas:
+            self.on_fallas_actualizadas()
+        if self.on_estadisticas_actualizadas:
+            self.on_estadisticas_actualizadas()
 
     def marcar_en_proceso(self, alerta: Dict):
         """Marca una falla como en proceso manualmente"""
@@ -193,8 +217,11 @@ class FallaController:
         alerta["estado"] = "en_proceso"
         self.falla_model.guardar_falla_activa(alerta)
         
+        # Notificar cambios
         if self.on_fallas_actualizadas:
             self.on_fallas_actualizadas()
+        if self.on_estadisticas_actualizadas:
+            self.on_estadisticas_actualizadas()
 
     def finalizar_falla(self, alerta: Dict):
         """Finaliza una falla manualmente"""
@@ -227,9 +254,11 @@ class FallaController:
             # 5. Notificar a las vistas
             if self.on_fallas_actualizadas:
                 self.on_fallas_actualizadas()
+            if self.on_estadisticas_actualizadas:
+                self.on_estadisticas_actualizadas()
         else:
             logger.error(f"Error al guardar falla #{alerta.get('numero_falla')} en historial")
-
+        
     def marcar_pendiente(self, alerta: Dict, nota: str):
         """Marca una falla como pendiente con nota"""
         if not self.licencia.puede_usar_pendientes:
@@ -273,7 +302,7 @@ class FallaController:
         return {
             "activas": len(self.fallas_activas),
             "en_proceso": sum(1 for a in self.fallas_activas if a.get("estado") == "en_proceso"),
-            "pendientes": len(self.get_fallas_pendientes())
+            "pendientes": sum(1 for a in self.fallas_activas if a.get("estado") == "pendiente")
         }
 
     def guardar_estado(self):

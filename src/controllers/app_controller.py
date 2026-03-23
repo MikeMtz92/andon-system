@@ -88,6 +88,8 @@ class AppController:
             self.falla_controller = FallaController(self.falla_model, self.config_model, self.licencia_controller)
             self.falla_controller.cargar_estado_inicial()
             self.falla_controller.on_fallas_actualizadas = self._notificar_actualizacion_fallas
+            self.falla_controller.on_estadisticas_actualizadas = self._notificar_actualizacion_estadisticas
+            self.falla_controller.on_alarma = self._reproducir_alarma
             
             # 5. Cargar configuraciones
             self.config_sistema = self.config_model.cargar_config_sistema()
@@ -110,6 +112,18 @@ class AppController:
         except Exception as e:
             logger.error(f"Error inicializando controlador: {e}")
             return False
+        
+        
+    def _reproducir_alarma(self):
+        """Reproduce la alarma sonora"""
+        import threading
+        import winsound
+        threading.Thread(target=lambda: winsound.Beep(1500, 1000), daemon=True).start()
+        
+    def _notificar_actualizacion_estadisticas(self):
+        """Notifica a las vistas que las estadísticas han cambiado"""
+        if self.main_view and hasattr(self.main_view, 'actualizar_estadisticas'):
+            self.main_view.actualizar_estadisticas()
     
     def start_services(self):
         """Inicia los servicios de red y serial"""
@@ -132,6 +146,9 @@ class AppController:
         """Notifica a las vistas que las fallas han cambiado"""
         if self.main_view and hasattr(self.main_view, 'actualizar_fallas'):
             self.main_view.actualizar_fallas()
+            # También actualizar estadísticas
+            if hasattr(self.main_view.andon_view, 'update_stats'):
+                self.main_view.andon_view.update_stats()
 
     def _iniciar_actualizacion_automatica(self):
         """Inicia el temporizador para actualización automática"""
