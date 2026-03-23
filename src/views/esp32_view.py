@@ -19,7 +19,7 @@ class ESP32View:
         
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Generar Código ESP32")
-        self.ventana.geometry("600x700")
+        self.ventana.geometry("700x800")  # Aumentado para más espacio
         self.ventana.configure(bg=self.theme.colores["fondo"])
         self.ventana.resizable(False, False)
         self.ventana.transient(parent)
@@ -27,14 +27,15 @@ class ESP32View:
         
         # Centrar ventana
         self.ventana.update_idletasks()
-        x = parent.winfo_x() + (parent.winfo_width() // 2) - (600 // 2)
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - (700 // 2)
+        x = parent.winfo_x() + (parent.winfo_width() // 2) - (700 // 2)
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - (800 // 2)
         self.ventana.geometry(f"+{x}+{y}")
         
         # Variables
         self.esp32_numero = tk.StringVar(value="1")
         self.esp32_server_ip = tk.StringVar(value="192.168.1.10")
-        self.pin_assignments = {}
+        self.pin_assignments = {}  # {tipo: pin_var}
+        self.boton_assignments = {}  # {tipo: numero_boton_var}
         self.tipos_falla = []
         
         self._cargar_tipos()
@@ -63,7 +64,7 @@ class ESP32View:
         main_frame = tk.Frame(self.ventana, bg=self.theme.colores["fondo"])
         main_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        canvas = tk.Canvas(main_frame, bg=self.theme.colores["fondo"], highlightthickness=0, height=500)
+        canvas = tk.Canvas(main_frame, bg=self.theme.colores["fondo"], highlightthickness=0, height=600)
         scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg=self.theme.colores["fondo"])
         
@@ -81,8 +82,11 @@ class ESP32View:
         # ===== PINES DEL ESP32 =====
         self._crear_seccion_pines(scrollable_frame)
         
-        # ===== ASIGNACIÓN DE BOTONES =====
-        self._crear_seccion_botones(scrollable_frame)
+        # ===== ASIGNACIÓN DE BOTONES (NUEVO) =====
+        self._crear_seccion_asignacion_botones(scrollable_frame)
+        
+        # ===== ASIGNACIÓN DE PINES =====
+        self._crear_seccion_pines_botones(scrollable_frame)
         
         # ===== IP DEL SERVIDOR =====
         self._crear_seccion_ip(scrollable_frame)
@@ -102,7 +106,7 @@ class ESP32View:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🔢 Número de Máquina",
+                text="Numero de Maquina",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -111,7 +115,7 @@ class ESP32View:
         maquina_frame.pack(fill="x", padx=15, pady=(0, 15))
         
         tk.Label(maquina_frame,
-                text="Máquina:",
+                text="Maquina:",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto_secundario"],
                 font=("Segoe UI", 10)).pack(side="left", padx=(0, 10))
@@ -140,12 +144,12 @@ class ESP32View:
         self.esp32_numero.trace_add("write", lambda *args: self._actualizar_ip_sugerida())
         
     def _crear_seccion_pines(self, parent):
-        """Crea la sección de información de pines"""
+        """Crea la sección de información de pines fijos"""
         card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1)
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🔌 Pines del ESP32",
+                text="Pines del ESP32 (Fijos)",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -155,7 +159,7 @@ class ESP32View:
         w5500_frame.pack(fill="x", padx=15, pady=5)
         
         tk.Label(w5500_frame,
-                text="🔌 W5500 (Obligatorios):",
+                text="W5500 (Ethernet):",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["danger"],
                 font=("Segoe UI", 10, "bold")).pack(anchor="w")
@@ -163,14 +167,14 @@ class ESP32View:
         pins_frame = tk.Frame(w5500_frame, bg=self.theme.colores["card"])
         pins_frame.pack(fill="x", pady=5)
         
-        pines_w5500 = ["D23", "D19", "D18", "D5", "D4"]
+        pines_w5500 = ["D23 (CS)", "D19 (MOSI)", "D18 (SCK)", "D5 (MISO)", "D4 (RST)"]
         for pin in pines_w5500:
             tk.Label(pins_frame,
                     text=pin,
                     bg=self.theme.colores["danger"],
                     fg=self.theme.colores["texto"],
                     font=("Segoe UI", 8),
-                    width=5,
+                    width=12,
                     relief="flat").pack(side="left", padx=2)
         
         tk.Label(card,
@@ -179,38 +183,146 @@ class ESP32View:
                 fg=self.theme.colores["texto_secundario"],
                 font=("Segoe UI", 9, "italic")).pack(anchor="w", padx=15, pady=(0, 15))
         
-    def _crear_seccion_botones(self, parent):
-        """Crea la sección de asignación de botones"""
+    def _crear_seccion_asignacion_botones(self, parent):
+        """Crea la sección de asignación de número de botón a tipo de falla"""
         card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1)
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🎚️ Asignación de Botones",
+                text="Asignacion de Botones",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
         
-        # Lista de pines disponibles para botones
-        pines_disponibles = ["D14", "D27", "D26", "D25", "D33", "D32", "D15", "D2", "D13", "D12", "D21", "D22"]
+        tk.Label(card,
+                text="Asigna qué número de botón físico activa cada tipo de falla:",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto_secundario"],
+                font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=(0, 5))
         
         botones_frame = tk.Frame(card, bg=self.theme.colores["card"])
-        botones_frame.pack(fill="x", padx=15, pady=5)
+        botones_frame.pack(fill="x", padx=15, pady=10)
+        
+        # Lista de números de botón disponibles (1-5 para BASIC, hasta 20 para PRO)
+        max_botones = min(20, self.controller.licencia_controller.max_tipos_falla * 2)
+        botones_disponibles = [str(i) for i in range(1, max_botones + 1)]
+        
+        self.boton_assignments = {}
         
         for i, tipo in enumerate(self.tipos_falla):
             row = tk.Frame(botones_frame, bg=self.theme.colores["card"])
-            row.pack(fill="x", pady=2)
+            row.pack(fill="x", pady=5)
+            
+            # Color del tipo de falla
+            color = self.theme.get_color_para_tipo(tipo)
+            color_indicator = tk.Frame(row, bg=color, width=15, height=15)
+            color_indicator.pack(side="left", padx=(0, 10))
+            color_indicator.pack_propagate(False)
             
             # Nombre del tipo
             tk.Label(row,
                     text=f"{tipo}:",
                     bg=self.theme.colores["card"],
                     fg=self.theme.colores["texto"],
-                    font=("Segoe UI", 9),
-                    width=15,
+                    font=("Segoe UI", 10, "bold"),
+                    width=20,
+                    anchor="w").pack(side="left", padx=(0, 10))
+            
+            # Selector de número de botón
+            boton_var = tk.StringVar(value=str(i + 1))  # Por defecto botón 1 para primer tipo, etc.
+            combo = ttk.Combobox(row,
+                                textvariable=boton_var,
+                                values=botones_disponibles,
+                                width=5,
+                                state="readonly")
+            combo.pack(side="left", padx=5)
+            
+            # Guardar referencia
+            self.boton_assignments[tipo] = {
+                "var": boton_var,
+                "combo": combo
+            }
+        
+        # Botón para verificar duplicados
+        tk.Button(card,
+                 text="Verificar Asignaciones",
+                 bg=self.theme.colores["warning"],
+                 fg=self.theme.colores["negro"],
+                 font=("Segoe UI", 9),
+                 relief="flat",
+                 padx=10,
+                 pady=3,
+                 cursor="hand2",
+                 command=self._verificar_asignaciones_botones).pack(anchor="w", padx=15, pady=(5, 15))
+        
+    def _verificar_asignaciones_botones(self):
+        """Verifica que no haya números de botón duplicados"""
+        asignados = {}
+        duplicados = []
+        
+        for tipo, data in self.boton_assignments.items():
+            num = data["var"].get()
+            if num in asignados:
+                duplicados.append(f"Botón {num} asignado a '{asignados[num]}' y '{tipo}'")
+            else:
+                asignados[num] = tipo
+        
+        if duplicados:
+            messagebox.showwarning("Duplicados Detectados", 
+                                 "Hay números de botón duplicados:\n\n" + 
+                                 "\n".join(duplicados) + 
+                                 "\n\nCada botón físico debe activar un solo tipo de falla.")
+        else:
+            messagebox.showinfo("Asignaciones Correctas", 
+                              "Todas las asignaciones de botones son correctas.\n\n" +
+                              "Cada botón físico activará un tipo de falla diferente.")
+        
+    def _crear_seccion_pines_botones(self, parent):
+        """Crea la sección de asignación de pines a botones"""
+        card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1)
+        card.pack(fill="x", pady=(0, 15))
+        
+        tk.Label(card,
+                text="Asignacion de Pines",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
+        
+        tk.Label(card,
+                text="Asigna qué pin GPIO del ESP32 se conecta a cada boton:",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto_secundario"],
+                font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=(0, 5))
+        
+        # Lista de pines disponibles para botones (evitando los usados por W5500)
+        pines_disponibles = ["D14", "D27", "D26", "D25", "D33", "D32", "D15", "D2", "D13", "D12", "D21", "D22"]
+        
+        botones_frame = tk.Frame(card, bg=self.theme.colores["card"])
+        botones_frame.pack(fill="x", padx=15, pady=10)
+        
+        self.pin_assignments = {}
+        
+        for tipo in self.tipos_falla:
+            row = tk.Frame(botones_frame, bg=self.theme.colores["card"])
+            row.pack(fill="x", pady=5)
+            
+            # Color del tipo de falla
+            color = self.theme.get_color_para_tipo(tipo)
+            color_indicator = tk.Frame(row, bg=color, width=15, height=15)
+            color_indicator.pack(side="left", padx=(0, 10))
+            color_indicator.pack_propagate(False)
+            
+            # Nombre del tipo
+            tk.Label(row,
+                    text=f"{tipo}:",
+                    bg=self.theme.colores["card"],
+                    fg=self.theme.colores["texto"],
+                    font=("Segoe UI", 10, "bold"),
+                    width=20,
                     anchor="w").pack(side="left", padx=(0, 10))
             
             # Selector de pin
-            pin_var = tk.StringVar(value=pines_disponibles[i] if i < len(pines_disponibles) else "D32")
+            pin_var = tk.StringVar(value=pines_disponibles[0])
             combo = ttk.Combobox(row,
                                 textvariable=pin_var,
                                 values=pines_disponibles,
@@ -219,22 +331,19 @@ class ESP32View:
             combo.pack(side="left", padx=5)
             
             # Indicador de disponibilidad
-            status_frame = tk.Frame(row, bg=self.theme.colores["card"])
-            status_frame.pack(side="left", padx=10)
-            
-            status_label = tk.Label(status_frame,
+            status_label = tk.Label(row,
                                    text="●",
                                    fg="#4CAF50",
                                    bg=self.theme.colores["card"],
                                    font=("Arial", 10))
-            status_label.pack(side="left")
+            status_label.pack(side="left", padx=10)
             
-            status_text = tk.Label(status_frame,
+            status_text = tk.Label(row,
                                   text="Libre",
                                   bg=self.theme.colores["card"],
                                   fg=self.theme.colores["texto_secundario"],
                                   font=("Segoe UI", 8))
-            status_text.pack(side="left", padx=5)
+            status_text.pack(side="left", padx=2)
             
             # Guardar referencia
             self.pin_assignments[tipo] = {
@@ -280,7 +389,7 @@ class ESP32View:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🌐 IP del Servidor",
+                text="IP del Servidor",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -313,7 +422,7 @@ class ESP32View:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="📝 Vista Previa del Código",
+                text="Vista Previa del Codigo",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -341,7 +450,7 @@ class ESP32View:
         
         # Botón actualizar
         tk.Button(card,
-                 text="🔄 Actualizar Vista Previa",
+                 text="Actualizar Vista Previa",
                  bg=self.theme.colores["card"],
                  fg=self.theme.colores["texto"],
                  font=("Segoe UI", 9),
@@ -357,7 +466,7 @@ class ESP32View:
         btn_frame.pack(fill="x", padx=20, pady=(0, 20))
         
         tk.Button(btn_frame,
-                 text="💾 Generar Archivo .ino",
+                 text="Generar Archivo .ino",
                  bg=self.theme.colores["success"],
                  fg=self.theme.colores["texto"],
                  font=("Segoe UI", 11, "bold"),
@@ -368,7 +477,7 @@ class ESP32View:
                  command=self._guardar_codigo).pack(side="right", padx=5)
         
         tk.Button(btn_frame,
-                 text="🚫 Cancelar",
+                 text="Cancelar",
                  bg=self.theme.colores["danger"],
                  fg=self.theme.colores["texto"],
                  font=("Segoe UI", 11),
@@ -399,19 +508,26 @@ class ESP32View:
             messagebox.showerror("Error", f"No se pudo obtener la IP:\n{str(e)}")
             
     def _generar_codigo(self):
-        """Genera el código para ESP32"""
+        """Genera el código para ESP32 usando las asignaciones de botones y pines"""
         try:
             num_maquina = int(self.esp32_numero.get())
             ip_octet = 100 + num_maquina
             mac_suffix = f"{num_maquina:02X}"
             
-            # Recoger pines asignados
-            pines = []
+            # Crear diccionario de mapeo: número de botón -> (tipo, pin)
+            mapeo = {}
             for tipo in self.tipos_falla:
-                if tipo in self.pin_assignments:
-                    pin_str = self.pin_assignments[tipo]["var"].get()
-                    pin_num = pin_str.replace("D", "")
-                    pines.append(pin_num)
+                if tipo in self.boton_assignments and tipo in self.pin_assignments:
+                    num_boton = int(self.boton_assignments[tipo]["var"].get())
+                    pin = self.pin_assignments[tipo]["var"].get()
+                    pin_num = pin.replace("D", "")
+                    mapeo[num_boton] = {"tipo": tipo, "pin": pin_num}
+            
+            # Ordenar por número de botón
+            botones_ordenados = sorted(mapeo.keys())
+            
+            # Generar arrays de pines en orden de botón
+            pines = [mapeo[b]["pin"] for b in botones_ordenados]
             
             # Generar código
             lineas = []
@@ -439,7 +555,7 @@ class ESP32View:
             lineas.append("")
             lineas.append("void setup() {")
             lineas.append("    Serial.begin(115200);")
-            lineas.append("    Serial.println(\"Máquina \" + String(numeroMaquina));")
+            lineas.append("    Serial.println(\"Maquina \" + String(numeroMaquina));")
             lineas.append("")
             lineas.append("    Ethernet.init(PIN_CS);")
             lineas.append("    Ethernet.begin(mac, ip);")
@@ -449,7 +565,7 @@ class ESP32View:
             lineas.append("")
             lineas.append("    for (int i = 0; i < numBotones; i++) {")
             lineas.append("        pinMode(botones[i], INPUT_PULLUP);")
-            lineas.append("        Serial.print(\"Botón \");")
+            lineas.append("        Serial.print(\"Boton \");")
             lineas.append("        Serial.print(i+1);")
             lineas.append("        Serial.print(\" en pin D\");")
             lineas.append("        Serial.println(botones[i]);")
@@ -468,20 +584,26 @@ class ESP32View:
             lineas.append("}")
             lineas.append("")
             lineas.append("void enviarEvento(int numeroBoton) {")
-            lineas.append("    Serial.print(\"Evento: Botón \");")
+            lineas.append("    Serial.print(\"Evento: Boton \");")
             lineas.append("    Serial.println(numeroBoton);")
             lineas.append("")
             lineas.append("    if (client.connect(serverIP, serverPort)) {")
             lineas.append("        String mensaje = String(numeroMaquina) + \"|Boton\" + String(numeroBoton) + \"\\n\";")
             lineas.append("        client.print(mensaje);")
             lineas.append("        client.stop();")
-            lineas.append("        Serial.println(\"✓ Enviado\");")
+            lineas.append("        Serial.println(\"Enviado\");")
             lineas.append("    } else {")
-            lineas.append("        Serial.println(\"✗ Error conexión\");")
+            lineas.append("        Serial.println(\"Error conexion\");")
             lineas.append("    }")
             lineas.append("}")
             
-            codigo = "\n".join(lineas)
+            # Agregar comentario con el mapeo
+            comentarios = ["\n/* MAPEO DE BOTONES A TIPOS DE FALLA: */"]
+            for b in botones_ordenados:
+                comentarios.append(f" * Boton {b} -> {mapeo[b]['tipo']} (pin D{mapeo[b]['pin']})")
+            comentarios.append(" */")
+            
+            codigo = "\n".join(lineas[:3] + comentarios + lineas[3:])
             
             self.code_preview.delete(1.0, tk.END)
             self.code_preview.insert(1.0, codigo)
@@ -489,7 +611,7 @@ class ESP32View:
         except Exception as e:
             logger.error(f"Error generando código: {e}")
             self.code_preview.delete(1.0, tk.END)
-            self.code_preview.insert(1.0, f"// Error generando código: {str(e)}")
+            self.code_preview.insert(1.0, f"// Error generando codigo: {str(e)}")
             
     def _guardar_codigo(self):
         """Guarda el código en un archivo .ino"""
@@ -507,7 +629,7 @@ class ESP32View:
             codigo = self.code_preview.get(1.0, tk.END)
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(codigo)
-            messagebox.showinfo("✅ Código Generado", f"Archivo guardado en:\n{file_path}")
+            messagebox.showinfo("Codigo Generado", f"Archivo guardado en:\n{file_path}")
             self.ventana.destroy()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo guardar:\n{str(e)}")
