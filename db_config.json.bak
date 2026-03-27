@@ -1,0 +1,10 @@
+{
+    "tipo": "mysql",
+    "host": "69.6.201.90",
+    "port": 3306,
+    "usuario": "migue304_Andon",
+    "password": "Andon260713.",
+    "base_datos": "migue304_Andon",
+    "usar_ssl": true,
+    "timeout": 30
+}

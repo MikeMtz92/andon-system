@@ -23,6 +23,9 @@ from src.services.excel_service import ExcelService
 
 from src.utils.constants import DB_CONFIG_DEFAULT, DB_CONFIG_FILE
 
+from src.services.sound_service import SoundService
+
+
 logger = logging.getLogger(__name__)
 
 class AppController:
@@ -60,6 +63,9 @@ class AppController:
         # Configurar cierre
         self._setup_shutdown_handlers()
         
+        # inicializar sonido
+        self.sound_service = SoundService()
+        
         self.auto_update_timer = None
 
 
@@ -85,7 +91,7 @@ class AppController:
             self.licencia_controller = LicenciaController(self.licencia_model, self.config_model)
             self.licencia_controller.cargar_licencia()
             
-            self.falla_controller = FallaController(self.falla_model, self.config_model, self.licencia_controller)
+            self.falla_controller = FallaController(self.falla_model, self.config_model, self.licencia_controller, self.sound_service)
             self.falla_controller.cargar_estado_inicial()
             self.falla_controller.on_fallas_actualizadas = self._notificar_actualizacion_fallas
             self.falla_controller.on_estadisticas_actualizadas = self._notificar_actualizacion_estadisticas

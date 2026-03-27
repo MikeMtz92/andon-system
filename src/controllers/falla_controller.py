@@ -7,6 +7,8 @@ from src.models.falla_model import FallaModel
 from src.models.config_model import ConfigModel
 from src.controllers.licencia_controller import LicenciaController
 from src.utils.helpers import solo_hora
+from src.models.sound_model import SoundModel
+from src.services.sound_service import SoundService
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +16,7 @@ class FallaController:
     """Controlador para la lógica de fallas"""
     
     def __init__(self, falla_model: FallaModel, config_model: ConfigModel, 
-                 licencia_controller: LicenciaController):
+                 licencia_controller: LicenciaController, sound_service):
         self.falla_model = falla_model
         self.config_model = config_model
         self.licencia = licencia_controller
@@ -30,6 +32,15 @@ class FallaController:
         
         # Configuración del contador
         self.config_contador = self.config_model.cargar_config_contador()
+        
+        # Nuevos atributos para sonidos
+        self.sound_model = None
+        self.sound_service = SoundService()  # Crear instancia del servicio
+        self.sonidos_configurados: Dict[str, str] = {}
+        
+        #Sonido
+        self.sound_service = sound_service  # Asignar el servicio inyectado
+        self.sonidos_configurados: Dict[str, str] = {}
 
     def cargar_estado_inicial(self):
         """Carga fallas activas y mapeo desde la BD según licencia"""
@@ -50,6 +61,17 @@ class FallaController:
         
         # Cargar mapeo de botones (siempre)
         self.mapeo_botones = self.falla_model.cargar_mapeo_botones()
+        
+        # Cargar sonidos SOLO si la licencia es PRO
+        if self.licencia.config.get('license_type') == 'pro':
+            if self.sound_model is None:
+                self.sound_model = SoundModel(self.falla_model.db)
+            self.sonidos_configurados = self.sound_model.cargar_sonidos()
+            logger.info(f"Cargados {len(self.sonidos_configurados)} sonidos personalizados (licencia PRO)")
+        else:
+            # Para MID y BASIC, limpiar sonidos configurados
+            self.sonidos_configurados = {}
+            logger.info(f"Sonidos personalizados deshabilitados (licencia {self.licencia.config.get('license_type')})")
         
         # Asignar números de falla si tienen (solo si hay fallas)
         for falla in self.fallas_activas:
@@ -197,9 +219,24 @@ class FallaController:
         self.fallas_activas.append(nueva_falla)
         logger.info(f"Nueva falla #{numero_falla}: {maquina} - {tipo}")
         
-        # Reproducir alarma para nueva falla
-        if self.on_alarma:
-            self.on_alarma()
+        # ===== NUEVA LÓGICA DE ALARMA CON VALIDACIÓN DE LICENCIA =====
+        # Solo reproducir sonido personalizado si la licencia es PRO
+        if self.licencia.config.get('license_type') == 'pro':
+            # Buscar si hay un sonido configurado para este tipo de falla
+            ruta_sonido = self.sonidos_configurados.get(tipo)
+            if ruta_sonido:
+                # Reproducir el sonido personalizado
+                self.sound_service.play_sound(ruta_sonido)
+                logger.debug(f"Reproduciendo sonido personalizado para {tipo}: {ruta_sonido}")
+            else:
+                # Si no hay sonido configurado, usar pitido genérico
+                if self.on_alarma:
+                    self.on_alarma()
+        else:
+            # Para licencias MID y BASIC, siempre usar el pitido genérico
+            if self.on_alarma:
+                self.on_alarma()
+                logger.debug(f"Reproduciendo pitido genérico (licencia {self.licencia.config.get('license_type')})")
         
         # Notificar cambios
         if self.on_fallas_actualizadas:

@@ -2,7 +2,6 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox, colorchooser
-from tkcalendar import DateEntry
 from src.utils.helpers import is_light_color
 from src.views.proyeccion_view import ProyeccionView
 import logging
@@ -29,6 +28,9 @@ class ProyeccionConfigView:
         self.ventana.transient(parent)
         self.ventana.grab_set()
         
+        # Configurar estilo para ttk widgets
+        self._configurar_estilo()
+        
         # Centrar
         self.ventana.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() // 2) - (600 // 2)
@@ -36,6 +38,34 @@ class ProyeccionConfigView:
         self.ventana.geometry(f"600x700+{x}+{y}")
         
         self._setup_ui()
+    
+    def _configurar_estilo(self):
+        """Configura el estilo de los widgets ttk"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Estilo para Checkbutton
+        style.configure("Config.TCheckbutton",
+                       background=self.theme.colores["card"],
+                       foreground=self.theme.colores["texto"],
+                       font=("Segoe UI", 10))
+        style.map("Config.TCheckbutton",
+                 background=[('active', self.theme.colores["card"]),
+                            ('pressed', self.theme.colores["card"]),
+                            ('selected', self.theme.colores["card"])])
+        
+        # Estilo para Radiobutton
+        style.configure("Config.TRadiobutton",
+                       background=self.theme.colores["card"],
+                       foreground=self.theme.colores["texto"],
+                       font=("Segoe UI", 9))
+        style.map("Config.TRadiobutton",
+                 background=[('active', self.theme.colores["card"]),
+                            ('pressed', self.theme.colores["card"]),
+                            ('selected', self.theme.colores["card"])])
+        
+        # Estilo para Frame
+        style.configure("Config.TFrame", background=self.theme.colores["card"])
         
     def _setup_ui(self):
         """Configura la interfaz de usuario"""
@@ -43,7 +73,7 @@ class ProyeccionConfigView:
         main_frame.pack(fill="both", expand=True, padx=20, pady=20)
         
         tk.Label(main_frame,
-                text="📺 Configurar Vista de Proyección",
+                text="Configurar Vista de Proyección",
                 bg=self.theme.colores["fondo"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 16, "bold")).pack(pady=(0, 20))
@@ -87,7 +117,7 @@ class ProyeccionConfigView:
         button_frame.pack(fill="x", pady=(20, 0))
         
         tk.Button(button_frame,
-                 text="🚫 Cancelar",
+                 text="Cancelar",
                  bg=self.theme.colores["danger"],
                  fg=self.theme.colores["texto"],
                  font=("Segoe UI", 11),
@@ -98,7 +128,7 @@ class ProyeccionConfigView:
                  command=self.ventana.destroy).pack(side="left", padx=5)
         
         tk.Button(button_frame,
-                 text="✅ Abrir Proyección",
+                 text="Abrir Proyección",
                  bg=self.theme.colores["success"],
                  fg=self.theme.colores["texto"],
                  font=("Segoe UI", 11, "bold"),
@@ -114,7 +144,7 @@ class ProyeccionConfigView:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🎨 Personalización de Colores",
+                text="Personalización de Colores",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -171,33 +201,36 @@ class ProyeccionConfigView:
             preview.config(bg=color[1])
     
     def _crear_seccion_visualizacion(self, parent):
-        """Crea la sección de opciones de visualización"""
-        card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1)
+        """Crea la sección de opciones de visualización usando ttk"""
+        card = ttk.Frame(parent, style="Config.TFrame")
         card.pack(fill="x", pady=(0, 15))
         
-        tk.Label(card,
-                text="👁️ Opciones de Visualización",
+        # Agregar borde visual (usando tk.Frame para el borde)
+        border = tk.Frame(card, bg=self.theme.colores["texto_secundario"], bd=1, relief="flat")
+        border.pack(fill="both", expand=True, padx=1, pady=1)
+        
+        content = tk.Frame(border, bg=self.theme.colores["card"])
+        content.pack(fill="both", expand=True, padx=14, pady=14)
+        
+        tk.Label(content,
+                text="Opciones de Visualización",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
-                font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
+                font=("Segoe UI", 12, "bold")).pack(anchor="w", pady=(0, 10))
         
         self.mostrar_contador_var = tk.BooleanVar(value=self.config.get("mostrar_contador", True))
-        tk.Checkbutton(card,
-                    text="Mostrar contador de fallas activas",
-                    variable=self.mostrar_contador_var,
-                    bg=self.theme.colores["card"],
-                    fg=self.theme.colores["texto"],
-                    selectcolor=self.theme.colores["accento"],
-                    font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=5)
+        cb1 = ttk.Checkbutton(content,
+                             text="Mostrar contador de fallas activas",
+                             variable=self.mostrar_contador_var,
+                             style="Config.TCheckbutton")
+        cb1.pack(anchor="w", pady=5)
         
         self.mostrar_pendientes_var = tk.BooleanVar(value=self.config.get("mostrar_pendientes", True))
-        tk.Checkbutton(card,
-                    text="Mostrar fallas pendientes en la tabla",
-                    variable=self.mostrar_pendientes_var,
-                    bg=self.theme.colores["card"],
-                    fg=self.theme.colores["texto"],
-                    selectcolor=self.theme.colores["accento"],
-                    font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=5)
+        cb2 = ttk.Checkbutton(content,
+                             text="Mostrar fallas pendientes en la tabla",
+                             variable=self.mostrar_pendientes_var,
+                             style="Config.TCheckbutton")
+        cb2.pack(anchor="w", pady=5)
     
     def _crear_seccion_contador(self, parent):
         """Crea la sección del contador"""
@@ -205,7 +238,7 @@ class ProyeccionConfigView:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🔢 Configuración del Contador de Fallas",
+                text="Configuración del Contador de Fallas",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -230,14 +263,11 @@ class ProyeccionConfigView:
         ]
         
         for texto, valor in periodos:
-            rb = tk.Radiobutton(periodo_frame,
-                        text=texto,
-                        variable=self.periodo_reset_var,
-                        value=valor,
-                        bg=self.theme.colores["card"],
-                        fg=self.theme.colores["texto"],
-                        selectcolor=self.theme.colores["accento"],
-                        font=("Segoe UI", 9))
+            rb = ttk.Radiobutton(periodo_frame,
+                                text=texto,
+                                variable=self.periodo_reset_var,
+                                value=valor,
+                                style="Config.TRadiobutton")
             rb.pack(anchor="w", padx=20, pady=2)
         
         # Info del contador actual
@@ -263,30 +293,19 @@ class ProyeccionConfigView:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🖥️ Modo de Visualización",
+                text="Modo de Visualización",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
         
         self.modo_var = tk.StringVar(value="ventana" if not self.config.get("pantalla_completa") else "completa")
         
-        tk.Radiobutton(card,
-                    text="🖥️ Ventana Movible",
-                    variable=self.modo_var,
-                    value="ventana",
-                    bg=self.theme.colores["card"],
-                    fg=self.theme.colores["texto"],
-                    selectcolor=self.theme.colores["accento"],
-                    font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=5)
-        
-        tk.Radiobutton(card,
-                    text="📺 Pantalla Completa",
-                    variable=self.modo_var,
-                    value="completa",
-                    bg=self.theme.colores["card"],
-                    fg=self.theme.colores["texto"],
-                    selectcolor=self.theme.colores["accento"],
-                    font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=5)
+        rb1 = ttk.Radiobutton(card,
+                             text="Ventana Movible",
+                             variable=self.modo_var,
+                             value="ventana",
+                             style="Config.TRadiobutton")
+        rb1.pack(anchor="w", padx=15, pady=5)
         
         # Opciones de tamaño (solo para modo ventana)
         self.tamano_frame = tk.Frame(card, bg=self.theme.colores["card"])
@@ -370,7 +389,7 @@ class ProyeccionConfigView:
         card.pack(fill="x", pady=(0, 15))
         
         tk.Label(card,
-                text="🖥️ Seleccionar Monitor",
+                text="Seleccionar Monitor",
                 bg=self.theme.colores["card"],
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
@@ -384,13 +403,11 @@ class ProyeccionConfigView:
         self._detectar_monitores()
         
         self.recordar_var = tk.BooleanVar(value=self.config.get("recordar_posicion", True))
-        tk.Checkbutton(card,
-                    text="💾 Recordar posición y tamaño",
-                    variable=self.recordar_var,
-                    bg=self.theme.colores["card"],
-                    fg=self.theme.colores["texto"],
-                    selectcolor=self.theme.colores["accento"],
-                    font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=10)
+        cb_recordar = ttk.Checkbutton(card,
+                                     text="Recordar posición y tamaño",
+                                     variable=self.recordar_var,
+                                     style="Config.TCheckbutton")
+        cb_recordar.pack(anchor="w", padx=15, pady=10)
     
     def _detectar_monitores(self):
         """Detecta monitores disponibles"""
@@ -404,32 +421,26 @@ class ProyeccionConfigView:
                 frame = tk.Frame(self.monitor_frame, bg=self.theme.colores["card"])
                 frame.pack(fill="x", pady=2)
                 
-                rb = tk.Radiobutton(frame,
-                                   text=f"Monitor {i+1}: {monitor.width}x{monitor.height}",
-                                   variable=self.monitor_var,
-                                   value=i,
-                                   bg=self.theme.colores["card"],
-                                   fg=self.theme.colores["texto"],
-                                   selectcolor=self.theme.colores["accento"],
-                                   font=("Segoe UI", 9))
+                rb = ttk.Radiobutton(frame,
+                                    text=f"Monitor {i+1}: {monitor.width}x{monitor.height}",
+                                    variable=self.monitor_var,
+                                    value=i,
+                                    style="Config.TRadiobutton")
                 rb.pack(anchor="w", padx=10)
                 
                 if i == self.config.get("monitor", 0):
-                    rb.select()
+                    rb.invoke()
         except:
             # Fallback a monitor único
             frame = tk.Frame(self.monitor_frame, bg=self.theme.colores["card"])
             frame.pack(fill="x", pady=2)
-            rb = tk.Radiobutton(frame,
-                               text="Monitor Principal",
-                               variable=self.monitor_var,
-                               value=0,
-                               bg=self.theme.colores["card"],
-                               fg=self.theme.colores["texto"],
-                               selectcolor=self.theme.colores["accento"],
-                               font=("Segoe UI", 9))
+            rb = ttk.Radiobutton(frame,
+                                text="Monitor Principal",
+                                variable=self.monitor_var,
+                                value=0,
+                                style="Config.TRadiobutton")
             rb.pack(anchor="w", padx=10)
-            rb.select()
+            rb.invoke()
     
     def _abrir_proyeccion(self):
         """Guarda configuración y abre proyección"""

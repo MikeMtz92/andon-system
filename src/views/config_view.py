@@ -1,12 +1,14 @@
 # src/views/config_view.py
 
 import tkinter as tk
-from tkinter import ttk, messagebox, colorchooser
+from tkinter import ttk, messagebox, colorchooser, filedialog
 import threading
+import os
+import logging
+
 from src.utils.widgets import ModernButton, ModernEntry, ModernCombobox
 from src.utils.helpers import is_light_color, lighten_color
 from src.utils.constants import TEMAS_PREDEFINIDOS, DB_CONFIG_DEFAULT
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +102,9 @@ class ConfigView:
         
         # Configurar canvas para que se expanda
         canvas.configure(yscrollcommand=scrollbar.set)
+        
+        # ===== SONIDOS (PRO) =====
+        self._crear_seccion_sonidos(scrollable_frame)
         
         def configure_canvas(event):
             # Actualizar el ancho del canvas
@@ -897,3 +902,146 @@ class ConfigView:
             self.ventana.destroy()
         except:
             pass
+        
+    def _crear_seccion_sonidos(self, parent):
+        """Crea la sección para configurar sonidos por tipo de falla (solo PRO)"""
+        if not self.controller.licencia_controller.puede_generar_esp32:  # Usamos 'puede_generar_esp32' como proxy de PRO
+            return
+        
+        card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1,
+                       highlightbackground=self.theme.colores["texto_secundario"])
+        card.pack(fill="x", padx=10, pady=(0, 15))
+        
+        tk.Label(card,
+                text="🔊 Sonidos de Alarma por Tipo de Falla (PRO)",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 14, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
+        
+        tk.Label(card,
+                text="Asigna un archivo de sonido (MP3 o WAV) a cada tipo de falla:",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto_secundario"],
+                font=("Segoe UI", 10)).pack(anchor="w", padx=15, pady=(0, 10))
+        
+        # Frame para los selectores de sonido
+        self.sonidos_frame = tk.Frame(card, bg=self.theme.colores["card"])
+        self.sonidos_frame.pack(fill="x", padx=15, pady=5)
+        
+        # Cargar tipos de falla
+        tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
+        self.sonido_vars = {}
+        
+        # Cargar configuraciones existentes
+        self.sonidos_configurados = self.falla_controller.sonidos_configurados
+        
+        for tipo in tipos_data:
+            nombre = tipo["nombre"]
+            frame = tk.Frame(self.sonidos_frame, bg=self.theme.colores["card"])
+            frame.pack(fill="x", pady=5)
+            
+            # Indicador de color
+            color = self.theme.get_color_para_tipo(nombre)
+            tk.Label(frame,
+                    text="●",
+                    fg=color,
+                    bg=self.theme.colores["card"],
+                    font=("Segoe UI", 12, "bold")).pack(side="left", padx=(0, 10))
+            
+            # Etiqueta del tipo
+            tk.Label(frame,
+                    text=nombre + ":",
+                    bg=self.theme.colores["card"],
+                    fg=self.theme.colores["texto"],
+                    font=("Segoe UI", 10, "bold"),
+                    width=20,
+                    anchor="w").pack(side="left", padx=(0, 5))
+            
+            # Entry para mostrar la ruta
+            ruta_var = tk.StringVar(value=self.sonidos_configurados.get(nombre, ""))
+            entry = tk.Entry(frame,
+                           textvariable=ruta_var,
+                           width=35,
+                           bg=self.theme.colores.get("superficie3", "#2d3047"),
+                           fg=self.theme.colores["texto"],
+                           relief="flat",
+                           font=("Segoe UI", 9))
+            entry.pack(side="left", padx=5)
+            
+            # Botón para seleccionar archivo
+            tk.Button(frame,
+                     text="📂 Seleccionar",
+                     bg=self.theme.colores["accento"],
+                     fg=self.theme.colores["texto"],
+                     font=("Segoe UI", 9),
+                     relief="flat",
+                     padx=8,
+                     pady=2,
+                     cursor="hand2",
+                     command=lambda t=nombre, var=ruta_var: self._seleccionar_sonido(t, var)).pack(side="left", padx=2)
+            
+            # Botón para probar sonido
+            tk.Button(frame,
+                     text="🔊 Probar",
+                     bg=self.theme.colores["success"],
+                     fg=self.theme.colores["texto"],
+                     font=("Segoe UI", 9),
+                     relief="flat",
+                     padx=8,
+                     pady=2,
+                     cursor="hand2",
+                     command=lambda var=ruta_var: self._probar_sonido(var.get())).pack(side="left", padx=2)
+            
+            self.sonido_vars[nombre] = ruta_var
+        
+        # Botón para guardar configuraciones de sonido
+        tk.Button(card,
+                 text="💾 Guardar Configuración de Sonidos",
+                 bg=self.theme.colores["success"],
+                 fg=self.theme.colores["texto"],
+                 font=("Segoe UI", 10, "bold"),
+                 relief="flat",
+                 padx=15,
+                 pady=8,
+                 cursor="hand2",
+                 command=self._guardar_sonidos).pack(pady=(10, 15))
+    
+    def _seleccionar_sonido(self, tipo_falla, var):
+        """Abre un diálogo para seleccionar un archivo de sonido"""
+        file_path = filedialog.askopenfilename(
+            title=f"Seleccionar sonido para {tipo_falla}",
+            filetypes=[
+                ("Archivos de audio", "*.mp3 *.wav"),
+                ("MP3 files", "*.mp3"),
+                ("WAV files", "*.wav"),
+                ("Todos los archivos", "*.*")
+            ]
+        )
+        if file_path:
+            var.set(file_path)
+            # Opcional: probar el sonido inmediatamente
+            self._probar_sonido(file_path)
+    
+    def _probar_sonido(self, file_path):
+        """Prueba la reproducción de un sonido"""
+        if file_path and self.controller.sound_service:
+            self.controller.sound_service.play_sound(file_path)
+    
+    def _guardar_sonidos(self):
+        """Guarda las configuraciones de sonido en la BD"""
+        for tipo, var in self.sonido_vars.items():
+            ruta = var.get().strip()
+            if ruta:
+                # Validar que el archivo existe
+                if not os.path.exists(ruta):
+                    messagebox.showwarning("Archivo no encontrado", 
+                                          f"El archivo para '{tipo}' no existe: {ruta}")
+                    continue
+                self.falla_controller.sound_model.guardar_sonido(tipo, ruta)
+            else:
+                # Si la ruta está vacía, eliminar la configuración
+                self.falla_controller.sound_model.eliminar_sonido(tipo)
+        
+        # Recargar los sonidos en el controlador
+        self.falla_controller.sonidos_configurados = self.falla_controller.sound_model.cargar_sonidos()
+        messagebox.showinfo("Configuración Guardada", "Sonidos de alarma actualizados correctamente.")

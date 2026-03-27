@@ -58,6 +58,22 @@ def crear_tablas_mysql(config_mysql):
             print("   ✅ Tabla 'demo_installations' creada")
         else:
             print("   ℹ️ Tabla 'demo_installations' ya existe")
+            
+        
+        # --- Tabla de Sonidos por Tipo de Falla ---
+        if 'sonidos_falla' not in tablas_existentes:
+            print("   Creando tabla 'sonidos_falla'...")
+            cursor.execute('''
+                CREATE TABLE sonidos_falla (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tipo_falla VARCHAR(100) NOT NULL UNIQUE,
+                    ruta_archivo VARCHAR(500) NOT NULL,
+                    UNIQUE KEY unique_tipo_falla (tipo_falla)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ''')
+            print("   ✅ Tabla 'sonidos_falla' creada")
+        else:
+            print("   ℹ️ Tabla 'sonidos_falla' ya existe")
 
         # --- Tabla de fallas (historial) ---
         if 'fallas' not in tablas_existentes:
