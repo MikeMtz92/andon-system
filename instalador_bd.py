@@ -7,23 +7,35 @@ import os
 import traceback
 import time
 
+# Obtener ruta del archivo de log (mismo que en instalador.py)
+LOG_FILE = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'andon_installer.log')
+
+def log_instalador(mensaje, tipo="INFO"):
+    """Guarda mensajes en el archivo de log del instalador"""
+    try:
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"[{timestamp}] [{tipo}] {mensaje}\n")
+    except:
+        pass
+
 def crear_tablas_mysql(config_mysql):
     """Crea TODAS las tablas con estructura COMPLETA en MySQL"""
-    print(f"⚙️ Creando tablas en MySQL: {config_mysql['host']}/{config_mysql['base_datos']}")
+    log_instalador(f"⚙️ Creando tablas en MySQL: {config_mysql['host']}/{config_mysql['base_datos']}")
     
     conn = None
     try:
-        # Intentar conectar con timeout más largo y usando implementación pura
-        print("   Conectando a MySQL...")
+        # Intentar conectar con timeout más largo
+        log_instalador("   Conectando a MySQL...")
         conn = mysql.connector.connect(
             host=config_mysql["host"],
             port=config_mysql["port"],
             user=config_mysql["usuario"],
             password=config_mysql["password"],
             database=config_mysql["base_datos"],
-            connection_timeout=60,  # Timeout más largo
-            ssl_disabled=not config_mysql["usar_ssl"],
-            use_pure=True,  # Forzar implementación pura de Python
+            connection_timeout=60,
+            ssl_disabled=not config_mysql.get("usar_ssl", False),
+            use_pure=True,
             autocommit=False,
             buffered=True,
             charset='utf8mb4',
@@ -31,53 +43,81 @@ def crear_tablas_mysql(config_mysql):
             get_warnings=True,
             raise_on_warnings=False
         )
-        print("   ✅ Conexión establecida")
+        log_instalador("   ✅ Conexión establecida")
         
         cursor = conn.cursor()
         
         # Verificar conexión
         cursor.execute("SELECT 1")
-        print("   ✅ Conexión verificada")
+        log_instalador("   ✅ Conexión verificada")
         
         # Verificar si las tablas ya existen
         cursor.execute("SHOW TABLES")
         tablas_existentes = [tabla[0] for tabla in cursor.fetchall()]
-        print(f"   📋 Tablas existentes: {tablas_existentes}")
+        log_instalador(f"   📋 Tablas existentes: {tablas_existentes}")
         
+        # ===== CREAR TABLAS EN ORDEN CORRECTO =====
+        
+        # 1. Tabla demo_installations
         if 'demo_installations' not in tablas_existentes:
-            print("   Creando tabla 'demo_installations'...")
+            log_instalador("   Creando tabla 'demo_installations'...")
             cursor.execute('''
                 CREATE TABLE demo_installations (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     installation_id VARCHAR(50) NOT NULL UNIQUE,
+                    ip_address VARCHAR(50),
                     started_at DATETIME NOT NULL,
                     expires_at DATE NOT NULL,
+                    is_expired BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME,
                     INDEX idx_installation (installation_id)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'demo_installations' creada")
+            log_instalador("   ✅ Tabla 'demo_installations' creada")
         else:
-            print("   ℹ️ Tabla 'demo_installations' ya existe")
-            
+            log_instalador("   ℹ️ Tabla 'demo_installations' ya existe")
         
-        # --- Tabla de Sonidos por Tipo de Falla ---
-        if 'sonidos_falla' not in tablas_existentes:
-            print("   Creando tabla 'sonidos_falla'...")
+        # 2. Tabla tipos_falla
+        if 'tipos_falla' not in tablas_existentes:
+            log_instalador("   Creando tabla 'tipos_falla'...")
             cursor.execute('''
-                CREATE TABLE sonidos_falla (
+                CREATE TABLE tipos_falla (
                     id INT AUTO_INCREMENT PRIMARY KEY,
-                    tipo_falla VARCHAR(100) NOT NULL UNIQUE,
-                    ruta_archivo VARCHAR(500) NOT NULL,
-                    UNIQUE KEY unique_tipo_falla (tipo_falla)
+                    nombre VARCHAR(100) NOT NULL UNIQUE,
+                    color VARCHAR(20) NOT NULL,
+                    orden INT DEFAULT 0
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'sonidos_falla' creada")
+            log_instalador("   ✅ Tabla 'tipos_falla' creada")
         else:
-            print("   ℹ️ Tabla 'sonidos_falla' ya existe")
-
-        # --- Tabla de fallas (historial) ---
+            log_instalador("   ℹ️ Tabla 'tipos_falla' ya existe")
+        
+        # 3. Tabla fallas_activas
+        if 'fallas_activas' not in tablas_existentes:
+            log_instalador("   Creando tabla 'fallas_activas'...")
+            cursor.execute('''
+                CREATE TABLE fallas_activas (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    maquina VARCHAR(50) NOT NULL,
+                    tipo VARCHAR(100) NOT NULL,
+                    inicio DATETIME NOT NULL,
+                    proceso DATETIME,
+                    fin DATETIME,
+                    numero_falla INT UNIQUE,
+                    estado VARCHAR(20) DEFAULT 'activa',
+                    nota_pendiente TEXT,
+                    fecha_pendiente DATETIME,
+                    last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX idx_numero_falla (numero_falla)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ''')
+            log_instalador("   ✅ Tabla 'fallas_activas' creada")
+        else:
+            log_instalador("   ℹ️ Tabla 'fallas_activas' ya existe")
+        
+        # 4. Tabla fallas (historial)
         if 'fallas' not in tablas_existentes:
-            print("   Creando tabla 'fallas'...")
+            log_instalador("   Creando tabla 'fallas'...")
             cursor.execute('''
                 CREATE TABLE fallas (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -98,51 +138,13 @@ def crear_tablas_mysql(config_mysql):
                     INDEX idx_numero_falla (numero_falla)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'fallas' creada")
+            log_instalador("   ✅ Tabla 'fallas' creada")
         else:
-            print("   ℹ️ Tabla 'fallas' ya existe")
+            log_instalador("   ℹ️ Tabla 'fallas' ya existe")
         
-        # --- Tabla de fallas activas ---
-        if 'fallas_activas' not in tablas_existentes:
-            print("   Creando tabla 'fallas_activas'...")
-            cursor.execute('''
-                CREATE TABLE fallas_activas (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    maquina VARCHAR(50) NOT NULL,
-                    tipo VARCHAR(100) NOT NULL,
-                    inicio DATETIME NOT NULL,
-                    proceso DATETIME,
-                    fin DATETIME,
-                    numero_falla INT UNIQUE,
-                    estado VARCHAR(20) DEFAULT 'activa',
-                    nota_pendiente TEXT,
-                    fecha_pendiente DATETIME,
-                    last_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX idx_numero_falla (numero_falla)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            ''')
-            print("   ✅ Tabla 'fallas_activas' creada")
-        else:
-            print("   ℹ️ Tabla 'fallas_activas' ya existe")
-        
-        # --- Tabla de tipos de falla ---
-        if 'tipos_falla' not in tablas_existentes:
-            print("   Creando tabla 'tipos_falla'...")
-            cursor.execute('''
-                CREATE TABLE tipos_falla (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    nombre VARCHAR(100) NOT NULL UNIQUE,
-                    color VARCHAR(20) NOT NULL,
-                    orden INT DEFAULT 0
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            ''')
-            print("   ✅ Tabla 'tipos_falla' creada")
-        else:
-            print("   ℹ️ Tabla 'tipos_falla' ya existe")
-        
-        # --- Tabla de configuración del sistema ---
+        # 5. Tabla config_sistema
         if 'config_sistema' not in tablas_existentes:
-            print("   Creando tabla 'config_sistema'...")
+            log_instalador("   Creando tabla 'config_sistema'...")
             cursor.execute('''
                 CREATE TABLE config_sistema (
                     id INT PRIMARY KEY,
@@ -169,13 +171,13 @@ def crear_tablas_mysql(config_mysql):
                     CONSTRAINT chk_sistema_id CHECK (id = 1)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'config_sistema' creada")
+            log_instalador("   ✅ Tabla 'config_sistema' creada")
         else:
-            print("   ℹ️ Tabla 'config_sistema' ya existe")
+            log_instalador("   ℹ️ Tabla 'config_sistema' ya existe")
         
-        # --- Tabla de configuración de proyección ---
+        # 6. Tabla config_proyeccion
         if 'config_proyeccion' not in tablas_existentes:
-            print("   Creando tabla 'config_proyeccion'...")
+            log_instalador("   Creando tabla 'config_proyeccion'...")
             cursor.execute('''
                 CREATE TABLE config_proyeccion (
                     id INT PRIMARY KEY,
@@ -195,13 +197,13 @@ def crear_tablas_mysql(config_mysql):
                     CONSTRAINT chk_proyeccion_id CHECK (id = 1)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'config_proyeccion' creada")
+            log_instalador("   ✅ Tabla 'config_proyeccion' creada")
         else:
-            print("   ℹ️ Tabla 'config_proyeccion' ya existe")
+            log_instalador("   ℹ️ Tabla 'config_proyeccion' ya existe")
         
-        # --- Tabla de configuración de contador ---
+        # 7. Tabla config_contador
         if 'config_contador' not in tablas_existentes:
-            print("   Creando tabla 'config_contador'...")
+            log_instalador("   Creando tabla 'config_contador'...")
             cursor.execute('''
                 CREATE TABLE config_contador (
                     id INT PRIMARY KEY,
@@ -211,13 +213,13 @@ def crear_tablas_mysql(config_mysql):
                     CONSTRAINT chk_contador_id CHECK (id = 1)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'config_contador' creada")
+            log_instalador("   ✅ Tabla 'config_contador' creada")
         else:
-            print("   ℹ️ Tabla 'config_contador' ya existe")
+            log_instalador("   ℹ️ Tabla 'config_contador' ya existe")
         
-        # --- Tabla de licencia ---
+        # 8. Tabla config_licencia
         if 'config_licencia' not in tablas_existentes:
-            print("   Creando tabla 'config_licencia'...")
+            log_instalador("   Creando tabla 'config_licencia'...")
             cursor.execute('''
                 CREATE TABLE config_licencia (
                     id INT PRIMARY KEY,
@@ -237,13 +239,13 @@ def crear_tablas_mysql(config_mysql):
                     CONSTRAINT chk_licencia_id CHECK (id = 1)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'config_licencia' creada")
+            log_instalador("   ✅ Tabla 'config_licencia' creada")
         else:
-            print("   ℹ️ Tabla 'config_licencia' ya existe")
+            log_instalador("   ℹ️ Tabla 'config_licencia' ya existe")
         
-        # --- Tabla Mapeo de Botones ---
+        # 9. Tabla mapeo_botones
         if 'mapeo_botones' not in tablas_existentes:
-            print("   Creando tabla 'mapeo_botones'...")
+            log_instalador("   Creando tabla 'mapeo_botones'...")
             cursor.execute('''
                 CREATE TABLE mapeo_botones (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -251,38 +253,56 @@ def crear_tablas_mysql(config_mysql):
                     tipo_falla VARCHAR(100) NOT NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')
-            print("   ✅ Tabla 'mapeo_botones' creada")
+            log_instalador("   ✅ Tabla 'mapeo_botones' creada")
         else:
-            print("   ℹ️ Tabla 'mapeo_botones' ya existe")
+            log_instalador("   ℹ️ Tabla 'mapeo_botones' ya existe")
+        
+        # 10. Tabla sonidos_falla
+        if 'sonidos_falla' not in tablas_existentes:
+            log_instalador("   Creando tabla 'sonidos_falla'...")
+            cursor.execute('''
+                CREATE TABLE sonidos_falla (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tipo_falla VARCHAR(100) NOT NULL,
+                    ruta_archivo VARCHAR(500) NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ''')
+            # Crear índice único después de la tabla
+            cursor.execute("CREATE UNIQUE INDEX idx_unique_tipo_falla ON sonidos_falla (tipo_falla)")
+            log_instalador("   ✅ Tabla 'sonidos_falla' creada")
+        else:
+            log_instalador("   ℹ️ Tabla 'sonidos_falla' ya existe")
+        
+       
         
         # ===== INSERTAR DATOS POR DEFECTO =====
         
         # Insertar config_sistema si no existe
         cursor.execute("SELECT COUNT(*) FROM config_sistema WHERE id = 1")
         if cursor.fetchone()[0] == 0:
-            print("   Insertando datos por defecto en config_sistema...")
+            log_instalador("   Insertando datos por defecto en config_sistema...")
             cursor.execute("INSERT INTO config_sistema (id) VALUES (1)")
-            print("   ✅ Datos insertados en config_sistema")
+            log_instalador("   ✅ Datos insertados en config_sistema")
         
         # Insertar config_proyeccion si no existe
         cursor.execute("SELECT COUNT(*) FROM config_proyeccion WHERE id = 1")
         if cursor.fetchone()[0] == 0:
-            print("   Insertando datos por defecto en config_proyeccion...")
+            log_instalador("   Insertando datos por defecto en config_proyeccion...")
             cursor.execute("INSERT INTO config_proyeccion (id) VALUES (1)")
-            print("   ✅ Datos insertados en config_proyeccion")
+            log_instalador("   ✅ Datos insertados en config_proyeccion")
         
         # Insertar config_contador si no existe
         cursor.execute("SELECT COUNT(*) FROM config_contador WHERE id = 1")
         if cursor.fetchone()[0] == 0:
-            print("   Insertando datos por defecto en config_contador...")
+            log_instalador("   Insertando datos por defecto en config_contador...")
             ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute("INSERT INTO config_contador (id, ultimo_reset) VALUES (1, %s)", (ahora,))
-            print("   ✅ Datos insertados en config_contador")
+            log_instalador("   ✅ Datos insertados en config_contador")
         
         # Insertar tipos de falla por defecto (solo si la tabla está vacía)
         cursor.execute("SELECT COUNT(*) FROM tipos_falla")
         if cursor.fetchone()[0] == 0:
-            print("   Insertando tipos de falla por defecto...")
+            log_instalador("   Insertando tipos de falla por defecto...")
             tipos_default = [
                 ("Mantenimiento", "#FF9A00", 1),
                 ("Producción", "#FF5252", 2),
@@ -293,18 +313,16 @@ def crear_tablas_mysql(config_mysql):
             for nombre, color, orden in tipos_default:
                 cursor.execute("INSERT INTO tipos_falla (nombre, color, orden) VALUES (%s, %s, %s)",
                               (nombre, color, orden))
-            print("   ✅ Tipos de falla insertados")
+            log_instalador("   ✅ Tipos de falla insertados")
         
         conn.commit()
-        print("   ✅ Todas las operaciones completadas correctamente")
+        log_instalador("   ✅ Todas las operaciones completadas correctamente")
         return True, "Base de datos MySQL inicializada correctamente"
     
     except mysql.connector.Error as e:
         error_msg = str(e)
-        print(f"   ❌ Error de MySQL: {error_msg}")
-        print(f"   Código de error: {e.errno if hasattr(e, 'errno') else 'N/A'}")
-        print(f"   SQL State: {e.sqlstate if hasattr(e, 'sqlstate') else 'N/A'}")
-        traceback.print_exc()
+        log_instalador(f"   ❌ Error de MySQL: {error_msg}", "ERROR")
+        log_instalador(f"   Código de error: {e.errno if hasattr(e, 'errno') else 'N/A'}", "ERROR")
         
         if conn:
             try:
@@ -316,9 +334,9 @@ def crear_tablas_mysql(config_mysql):
     
     except Exception as e:
         error_msg = str(e)
-        print(f"   ❌ Error general: {error_msg}")
-        print(f"   Tipo de error: {type(e).__name__}")
-        traceback.print_exc()
+        log_instalador(f"   ❌ Error general: {error_msg}", "ERROR")
+        log_instalador(f"   Tipo de error: {type(e).__name__}", "ERROR")
+        log_instalador(traceback.format_exc(), "ERROR")
         
         if conn:
             try:
@@ -332,6 +350,6 @@ def crear_tablas_mysql(config_mysql):
         if conn:
             try:
                 conn.close()
-                print("   Conexión cerrada")
+                log_instalador("   Conexión cerrada")
             except:
                 pass

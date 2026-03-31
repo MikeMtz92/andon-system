@@ -37,9 +37,6 @@ Source: "instalador\ReActionAndon.exe"; DestDir: "{app}"; Flags: ignoreversion
 ; Recursos
 Source: "recursos\icono.ico"; DestDir: "{app}"; Flags: ignoreversion
 
-; Carpeta para sonidos personalizados (opcional)
-Source: "recursos\sounds\*"; DestDir: "{app}\sounds"; Flags: ignoreversion recursesubdirs createallsubdirs
-
 ; README
 Source: "README.txt"; DestDir: "{app}"; Flags: ignoreversion isreadme
 
@@ -55,7 +52,6 @@ Filename: "{app}"; Description: "Abrir carpeta de instalación"; Flags: postinst
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/c if exist ""{app}\db_config.json"" del ""{app}\db_config.json"""; Flags: runhidden; RunOnceId: "CleanConfig"
-Filename: "{cmd}"; Parameters: "/c if exist ""{app}\sounds"" rmdir /s /q ""{app}\sounds"""; Flags: runhidden; RunOnceId: "CleanSounds"
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -71,7 +67,7 @@ begin
            'IMPORTANTE:' + #13#10 +
            '• Al ejecutar el programa por primera vez, se te pedirá activar una licencia' + #13#10 +
            '• Luego deberás configurar la conexión a MySQL' + #13#10 +
-           '• Los sonidos personalizados se guardan en la carpeta sounds' + #13#10 + #13#10 +
+           '• Los sonidos personalizados se guardan cuando los configures desde la aplicación' + #13#10 + #13#10 +
            '¡Gracias por elegir ReAction Andon System!', 
            mbInformation, MB_OK);
   end;

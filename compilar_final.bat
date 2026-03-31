@@ -32,7 +32,7 @@ if errorlevel 1 (
     pip install pyinstaller
 )
 
-:: Instalar/actualizar dependencias (incluir pygame para sonidos)
+:: Instalar/actualizar dependencias
 echo Instalando dependencias necesarias...
 pip install --upgrade mysql-connector-python pandas openpyxl matplotlib tkcalendar pyserial psutil screeninfo requests certifi pygame
 echo OK
@@ -87,8 +87,14 @@ pyinstaller --onefile --windowed ^
     --hidden-import src.views.proyeccion_config_view ^
     --hidden-import src.views.proyeccion_view ^
     --hidden-import mysql.connector ^
+    --hidden-import mysql.connector.connection ^
+    --hidden-import mysql.connector.cursor ^
+    --hidden-import mysql.connector.cursor_cext ^
+    --hidden-import mysql.connector.pooling ^
     --hidden-import mysql.connector.locales ^
     --hidden-import mysql.connector.locales.eng ^
+    --hidden-import mysql.connector.errorcode ^
+    --hidden-import mysql.connector.errors ^
     --hidden-import pandas ^
     --hidden-import openpyxl ^
     --hidden-import matplotlib ^

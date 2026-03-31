@@ -115,20 +115,17 @@ class ExcelService:
             # ===== GRÁFICA 6: Promedio Proceso a Fin =====
             self._agregar_grafica_proceso_fin(df, wb)
             
-            # ===== GRÁFICA 7: Fallas por Estado =====
+            # ===== GRÁFICA 7: Fallas Pendientes (solo las que fueron pendientes) =====
             self._agregar_grafica_fallas_por_estado(df, wb)
             
-            # ===== GRÁFICA 8: Fallas Pendientes por Tipo =====
-            self._agregar_grafica_pendientes_por_tipo(df, wb)
-            
-            # ===== GRÁFICA 9: Tiempo Pendiente a Fin por Tipo =====
+            # ===== GRÁFICA 8: Tiempo Pendiente a Fin por Tipo =====
             self._agregar_grafica_tiempo_pendiente_fin(df, wb)
 
         except Exception as e:
             logger.error(f"Error agregando gráficas: {e}")
             import traceback
             traceback.print_exc()
-
+    
     def _agregar_grafica_fallas_por_tipo(self, df: pd.DataFrame, wb):
         """Gráfica 1: Fallas por Tipo"""
         if 'Tipo' in df.columns:
@@ -143,42 +140,74 @@ class ExcelService:
                 self._embed_grafica_en_excel(fig, wb, "Fallas por Tipo")
 
     def _agregar_grafica_fallas_por_maquina(self, df: pd.DataFrame, wb):
-        """Gráfica 2: Fallas por Máquina (Top 15)"""
+        """Gráfica 2: Fallas por Máquina - MOSTRAR TODAS"""
         if 'Máquina' in df.columns:
-            df_maq = df["Máquina"].value_counts().head(15)
+            # Mostrar TODAS las máquinas, no solo top 15
+            df_maq = df["Máquina"].value_counts()
             if not df_maq.empty:
-                fig, ax = plt.subplots(figsize=(12, 6))
-                df_maq.plot(kind="bar", ax=ax, title="Fallas por Máquina (Top 15)",
-                          color=self.theme.colores.get("accento", "#e94560"))
+                fig, ax = plt.subplots(figsize=(max(12, len(df_maq) * 0.3), 8))
+                
+                # Ordenar para mejor visualización
+                df_maq = df_maq.sort_values(ascending=False)
+                
+                # Crear colores graduales
+                cmap = plt.cm.viridis
+                colors = [cmap(i/len(df_maq)) for i in range(len(df_maq))]
+                
+                bars = ax.bar(range(len(df_maq)), df_maq.values, color=colors)
+                ax.set_xticks(range(len(df_maq)))
+                ax.set_xticklabels(df_maq.index, rotation=45, ha='right', fontsize=9)
+                ax.set_title("Fallas por Máquina", fontsize=14, fontweight='bold')
                 ax.set_xlabel("Máquina")
                 ax.set_ylabel("Cantidad")
-                ax.tick_params(axis='x', rotation=45)
+                
+                # Agregar valores sobre las barras
+                for i, (bar, val) in enumerate(zip(bars, df_maq.values)):
+                    ax.text(bar.get_x() + bar.get_width()/2, val + 0.5, 
+                        str(val), ha='center', va='bottom', fontweight='bold', fontsize=8)
+                
+                plt.tight_layout()
                 self._embed_grafica_en_excel(fig, wb, "Fallas por Máquina")
-
+    
     def _agregar_grafica_fallas_por_tipo_y_maquina(self, df: pd.DataFrame, wb):
-        """Gráfica 3: Fallas por Tipo en cada Máquina (stacked)"""
+        """Gráfica 3: Fallas por Tipo en cada Máquina - MOSTRAR TODAS"""
         if 'Máquina' in df.columns and 'Tipo' in df.columns:
             try:
+                # Crear tabla pivote con TODAS las máquinas y tipos
                 pivot = pd.pivot_table(df, index='Máquina', columns='Tipo',
-                                      aggfunc='size', fill_value=0)
-                if not pivot.empty and len(pivot.columns) > 0:
-                    top_maquinas = df['Máquina'].value_counts().head(10).index
-                    pivot = pivot.loc[top_maquinas]
-                    tipos_top = df['Tipo'].value_counts().head(5).index
-                    pivot = pivot[tipos_top]
+                                    aggfunc='size', fill_value=0)
+                
+                if not pivot.empty:
+                    # Calcular tamaño de figura basado en número de máquinas
+                    fig_height = max(8, len(pivot) * 0.4)
+                    fig_width = max(12, len(pivot.columns) * 0.5)
+                    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
                     
-                    fig, ax = plt.subplots(figsize=(14, 8))
+                    # Colores para cada tipo
                     colores = [self.theme.get_color_para_tipo(t) for t in pivot.columns]
+                    
+                    # Crear gráfica de barras apiladas
                     pivot.plot(kind="bar", stacked=True, ax=ax, color=colores)
-                    ax.set_title("Fallas por Tipo en cada Máquina (Top 10 Máquinas)")
+                    
+                    ax.set_title("Fallas por Tipo en cada Máquina", fontsize=14, fontweight='bold')
                     ax.set_xlabel("Máquina")
                     ax.set_ylabel("Cantidad de Fallas")
-                    ax.tick_params(axis='x', rotation=45)
-                    ax.legend(title="Tipo", bbox_to_anchor=(1.05, 1), loc='upper left')
+                    ax.tick_params(axis='x', rotation=45, labelsize=8)
+                    ax.legend(title="Tipo", bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=8)
+                    
+                    # Agregar totales sobre las barras
+                    total_por_maquina = pivot.sum(axis=1)
+                    for i, (idx, total) in enumerate(total_por_maquina.items()):
+                        if total > 0:
+                            ax.text(i, total + 0.5, str(total), 
+                                ha='center', va='bottom', fontweight='bold', fontsize=8)
+                    
+                    plt.tight_layout()
                     self._embed_grafica_en_excel(fig, wb, "Fallas por Máq y Tipo")
+                    
             except Exception as e:
                 logger.error(f"Error en gráfica stacked: {e}")
-
+   
     def _agregar_grafica_tiempo_total_promedio(self, df: pd.DataFrame, wb):
         """Gráfica 4: Tiempo Total Promedio por Tipo"""
         if 'T. Total' in df.columns and 'Tipo' in df.columns:
@@ -246,25 +275,50 @@ class ExcelService:
                 logger.error(f"Error en gráfica proceso-fin: {e}")
 
     def _agregar_grafica_fallas_por_estado(self, df: pd.DataFrame, wb):
-        """Gráfica 7: Fallas por Estado"""
-        if 'Estado' in df.columns:
-            estado_counts = df["Estado"].value_counts()
-            if not estado_counts.empty:
-                fig, ax = plt.subplots(figsize=(10, 6))
-                estado_map = {'activa': ' Activa', 'en_proceso': ' En Proceso', 
-                             'pendiente': ' Pendiente', 'resuelta': ' Resuelta'}
-                estado_labels = [estado_map.get(e, e) for e in estado_counts.index]
-                colores_estado = [self.theme.colores.get('danger', '#FF5252'),
-                                 self.theme.colores.get('warning', '#FFC107'),
-                                 self.theme.colores.get('pendiente', '#FFA500'),
-                                 self.theme.colores.get('success', '#00C853')]
-                estado_counts.plot(kind="bar", ax=ax, title="Fallas por Estado", 
-                                  color=colores_estado[:len(estado_counts)])
-                ax.set_xlabel("Estado")
-                ax.set_ylabel("Cantidad")
-                ax.set_xticklabels(estado_labels, rotation=45)
-                self._embed_grafica_en_excel(fig, wb, "Fallas por Estado")
-
+        """Gráfica 7: Fallas que fueron Pendientes (con fecha_pendiente)"""
+        # Verificar si hay fallas pendientes en el historial
+        if 'fecha_pendiente' in df.columns:
+            # Filtrar solo fallas que fueron marcadas como pendientes (tienen fecha_pendiente)
+            pendientes_real = df[df['fecha_pendiente'].notna()]
+            
+            if not pendientes_real.empty:
+                # Agrupar por tipo
+                pendientes_por_tipo = pendientes_real["Tipo"].value_counts()
+                
+                if not pendientes_por_tipo.empty:
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    colores = [self.theme.get_color_para_tipo(t) for t in pendientes_por_tipo.index]
+                    
+                    bars = pendientes_por_tipo.plot(kind="bar", ax=ax, 
+                                                    title="Fallas Marcadas como Pendientes",
+                                                    color=colores)
+                    ax.set_xlabel("Tipo de Falla")
+                    ax.set_ylabel("Cantidad de Pendientes")
+                    ax.tick_params(axis='x', rotation=45)
+                    
+                    # Agregar valores sobre las barras
+                    for i, v in enumerate(pendientes_por_tipo.values):
+                        ax.text(i, v + 0.1, str(v), ha='center', va='bottom', fontweight='bold')
+                    
+                    plt.tight_layout()
+                    self._embed_grafica_en_excel(fig, wb, "Fallas Pendientes")
+            else:
+                # Si no hay fallas pendientes, crear un mensaje
+                fig, ax = plt.subplots(figsize=(8, 4))
+                ax.text(0.5, 0.5, "No hay fallas marcadas como pendientes en este período",
+                    ha='center', va='center', fontsize=12, transform=ax.transAxes)
+                ax.set_title("Fallas Pendientes", fontsize=14, fontweight='bold')
+                ax.axis('off')
+                self._embed_grafica_en_excel(fig, wb, "Fallas Pendientes")
+        else:
+            # Si no hay columna fecha_pendiente, mostrar mensaje
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.text(0.5, 0.5, "No se encontraron datos de fallas pendientes",
+                ha='center', va='center', fontsize=12, transform=ax.transAxes)
+            ax.set_title("Fallas Pendientes", fontsize=14, fontweight='bold')
+            ax.axis('off')
+            self._embed_grafica_en_excel(fig, wb, "Fallas Pendientes")
+    
     def _agregar_grafica_pendientes_por_tipo(self, df: pd.DataFrame, wb):
         """Gráfica 8: Fallas Pendientes por Tipo (fallas que fueron marcadas como pendientes)"""
         if 'Tipo' in df.columns and 'Estado' in df.columns:

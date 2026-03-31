@@ -1,25 +1,48 @@
 # instalador.py
 
 import tkinter as tk
-from tkinter import messagebox, ttk, colorchooser  
+from tkinter import messagebox, ttk, colorchooser
 import hashlib
 import sys
 import os
 from datetime import datetime
 import mysql.connector
+import traceback
 
 # Importar desde la nueva estructura
 from src.models.database import Database
 from src.models.config_model import ConfigModel
 from src.models.falla_model import FallaModel
 from src.models.licencia_model import LicenciaModel
-from src.utils.constants import DB_CONFIG_DEFAULT
 
 # Importar función de creación de tablas
 from instalador_bd import crear_tablas_mysql
 
+# Configurar archivo de log para el instalador
+LOG_FILE = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'andon_installer.log')
+
+def log_instalador(mensaje, tipo="INFO"):
+    """Guarda mensajes en el archivo de log del instalador"""
+    try:
+        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"[{timestamp}] [{tipo}] {mensaje}\n")
+    except:
+        pass
+
 class InstaladorAndon:
     def __init__(self):
+        # Limpiar log anterior
+        try:
+            if os.path.exists(LOG_FILE):
+                os.remove(LOG_FILE)
+        except:
+            pass
+        
+        log_instalador("="*50)
+        log_instalador("INICIANDO INSTALADOR ANDON")
+        log_instalador("="*50)
+        
         self.root = tk.Tk()
         self.root.title("Instalación - Sistema Andon")
         self.root.geometry("600x700")
@@ -28,6 +51,7 @@ class InstaladorAndon:
         # Generar ID de instalación
         computer_name = os.environ.get('COMPUTERNAME', 'unknown')
         self.installation_id = hashlib.md5(computer_name.encode()).hexdigest()[:12].upper()
+        log_instalador(f"ID de instalación: {self.installation_id}")
         
         # Configuraciones
         self.config_licencia = None
@@ -124,6 +148,8 @@ class InstaladorAndon:
     def validar_licencia_ingresada(self):
         """Valida la licencia ingresada usando el modelo"""
         license_key = self.entry_licencia.get().strip()
+        log_instalador(f"Validando licencia: {license_key}")
+        
         if not license_key:
             messagebox.showerror("Error", "Por favor ingresa una clave de licencia")
             return
@@ -132,7 +158,6 @@ class InstaladorAndon:
         db_temp = Database()
         licencia_model = LicenciaModel(db_temp)
         
-        print(f"🔍 Validando licencia: {license_key}")
         valido, info = licencia_model.validar_licencia_online(license_key, self.installation_id)
         
         if valido:
@@ -151,14 +176,17 @@ class InstaladorAndon:
                 "last_export_date": "",
                 "expires_at": info['expires_at']
             }
+            log_instalador(f"Licencia {info['license_type']} activada correctamente")
             messagebox.showinfo("✅ Licencia Válida", 
                               f"Licencia {info['license_type'].upper()} activada correctamente")
             self.paso2_seleccion_bd()
         else:
+            log_instalador(f"Licencia inválida: {info}", "ERROR")
             messagebox.showerror("❌ Licencia Inválida", f"No se pudo validar la licencia:\n{info}")
     
     def iniciar_demo_desde_instalador(self):
         """Inicia periodo de demo usando el modelo"""
+        log_instalador("Iniciando demo")
         db_temp = Database()
         licencia_model = LicenciaModel(db_temp)
         
@@ -180,11 +208,13 @@ class InstaladorAndon:
                 "last_export_date": "",
                 "expires_at": info
             }
+            log_instalador(f"Demo activado hasta: {info}")
             messagebox.showinfo("🎁 Demo Activado", 
                               f"Periodo de demo de 15 días activado\nVálido hasta: {info}\n\n"
                               "Tendrás acceso a todas las funciones PRO durante este periodo.")
             self.paso2_seleccion_bd()
         else:
+            log_instalador(f"Error iniciando demo: {info}", "ERROR")
             messagebox.showerror("❌ Error", f"No se pudo iniciar demo:\n{info}")
     
     # ========== PASO 2: CONFIGURACIÓN DE BASE DE DATOS ==========
@@ -192,6 +222,8 @@ class InstaladorAndon:
         """Configuración de la base de datos MySQL"""
         for widget in self.root.winfo_children():
             widget.destroy()
+        
+        log_instalador("Paso 2: Configuración de base de datos")
         
         tipo_licencia = self.config_licencia['license_type']
         
@@ -267,6 +299,7 @@ class InstaladorAndon:
     
     def probar_conexion_mysql(self):
         """Prueba la conexión a MySQL"""
+        log_instalador("Probando conexión MySQL")
         try:
             config = {
                 "host": self.mysql_vars["Host:"].get(),
@@ -283,10 +316,13 @@ class InstaladorAndon:
             exito, msg = db_temp.test_connection()
             
             if exito:
+                log_instalador("Conexión exitosa")
                 messagebox.showinfo("✅ Éxito", f"Conexión exitosa:\n{msg}")
             else:
+                log_instalador(f"Error de conexión: {msg}", "ERROR")
                 messagebox.showerror("❌ Error", f"No se pudo conectar:\n{msg}")
         except Exception as e:
+            log_instalador(f"Error probando conexión: {str(e)}", "ERROR")
             messagebox.showerror("❌ Error", f"Error al probar conexión:\n{str(e)}")
     
     # ========== PASO 2.5: PERSONALIZAR FALLAS ==========
@@ -294,6 +330,8 @@ class InstaladorAndon:
         """Paso de personalización de tipos de falla (disponible para TODAS las licencias durante instalación)"""
         for widget in self.root.winfo_children():
             widget.destroy()
+        
+        log_instalador("Paso 2.5: Personalización de fallas")
         
         tipo_licencia = self.config_licencia['license_type']
         
@@ -431,6 +469,7 @@ class InstaladorAndon:
                             "Ahora puedes asignar los botones.")
             
         except Exception as e:
+            log_instalador(f"Error actualizando lista botones: {str(e)}", "ERROR")
             messagebox.showerror("Error", f"No se pudo actualizar la lista:\n{str(e)}")
     
     def _crear_fila_tipo_falla(self, parent, index, nombre_default, color_default):
@@ -544,7 +583,7 @@ class InstaladorAndon:
         self.tipos_falla_instalacion = []
         for tipo_data in self.tipos_instalacion:
             nombre = tipo_data["var"].get().strip()
-            if nombre:  # Solo incluir si tiene nombre
+            if nombre:
                 color = tipo_data["color_var"].get()
                 self.tipos_falla_instalacion.append({
                     "nombre": nombre,
@@ -565,9 +604,9 @@ class InstaladorAndon:
         # Recolectar mapeo de botones
         self.mapeo_instalacion = {}
         for num_boton, var in self.mapeo_vars_instalacion.items():
-            if num_boton <= self.config_licencia['max_fallas']:  # Solo dentro del límite
+            if num_boton <= self.config_licencia['max_fallas']:
                 tipo = var.get().strip()
-                if tipo:  # Solo guardar si seleccionó algo
+                if tipo:
                     self.mapeo_instalacion[num_boton] = tipo
         
         # Limpiar la ventana para mostrar el resumen
@@ -587,6 +626,7 @@ class InstaladorAndon:
                 "usar_ssl": self.ssl_var.get()
             }
         except KeyError as e:
+            log_instalador(f"Error en configuración: {e}", "ERROR")
             messagebox.showerror("Error", f"Falta configuración: {e}")
             self.paso2_seleccion_bd()
             return
@@ -636,45 +676,45 @@ class InstaladorAndon:
                 padx=30, pady=10, cursor="hand2").pack(pady=10)
         
         tk.Button(btn_frame, text="↻ VOLVER", 
-                command=self.paso2_5_personalizar_fallas,  # Volver a personalización
+                command=self.paso2_5_personalizar_fallas,
                 bg="#FF5252", fg="white", font=("Segoe UI", 11), 
                 padx=20, pady=5, cursor="hand2").pack(pady=5)
     
     def ejecutar_instalacion(self):
         """Ejecuta la instalación usando los nuevos modelos"""
+        log_instalador("="*50)
+        log_instalador("EJECUTANDO INSTALACIÓN")
+        log_instalador("="*50)
+        
         try:
-            print("\n" + "="*50)
-            print("INICIANDO INSTALACIÓN")
-            print("="*50 + "\n")
-            
             # 1. Probar conexión antes de instalar
-            print("[1/7] Probando conexión a MySQL...")
-            print(f"    Host: {self.config_db['host']}")
-            print(f"    Puerto: {self.config_db['port']}")
-            print(f"    Usuario: {self.config_db['usuario']}")
-            print(f"    Base de datos: {self.config_db['base_datos']}")
+            log_instalador("[1/8] Probando conexión a MySQL...")
+            log_instalador(f"    Host: {self.config_db['host']}")
+            log_instalador(f"    Puerto: {self.config_db['port']}")
+            log_instalador(f"    Usuario: {self.config_db['usuario']}")
+            log_instalador(f"    Base de datos: {self.config_db['base_datos']}")
             
             db = Database()
             db.initialize(self.config_db)
             exito, msg = db.test_connection()
             
             if not exito:
-                print(f"    ❌ Error: {msg}")
+                log_instalador(f"    ❌ Error: {msg}", "ERROR")
                 messagebox.showerror("Error de Conexión", 
                                 f"No se puede conectar a MySQL:\n{msg}\n\n"
                                 "Verifica:\n"
                                 "• Que MySQL esté instalado y corriendo\n"
                                 "• Los datos de conexión\n"
-                                "• Que la contraseña sea correcta")
+                                "• Que la contraseña sea correcta\n\n"
+                                f"Revisa el archivo de log para más detalles:\n{LOG_FILE}")
                 return
-            print("    ✅ Conexión exitosa")
+            log_instalador("    ✅ Conexión exitosa")
             
             # 2. Verificar/Crear base de datos
-            print("\n[2/7] Verificando base de datos...")
+            log_instalador("[2/8] Verificando base de datos...")
             try:
                 import mysql.connector
-                # Primero, intentar conectar directamente a la base de datos
-                print(f"    Verificando si la base de datos '{self.config_db['base_datos']}' existe...")
+                log_instalador(f"    Verificando si la base de datos '{self.config_db['base_datos']}' existe...")
                 try:
                     conn = mysql.connector.connect(
                         host=self.config_db["host"],
@@ -687,11 +727,11 @@ class InstaladorAndon:
                         use_pure=True
                     )
                     conn.close()
-                    print(f"    ✅ La base de datos '{self.config_db['base_datos']}' YA EXISTE y es accesible")
+                    log_instalador(f"    ✅ La base de datos '{self.config_db['base_datos']}' YA EXISTE y es accesible")
                     
                 except mysql.connector.Error as e:
                     if "1049" in str(e):
-                        print(f"    ⚠️ La base de datos no existe. Intentando crearla...")
+                        log_instalador(f"    ⚠️ La base de datos no existe. Intentando crearla...")
                         
                         conn = mysql.connector.connect(
                             host=self.config_db["host"],
@@ -705,71 +745,69 @@ class InstaladorAndon:
                         cursor = conn.cursor()
                         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {self.config_db['base_datos']} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
                         conn.close()
-                        print(f"    ✅ Base de datos creada correctamente")
+                        log_instalador(f"    ✅ Base de datos creada correctamente")
                     else:
-                        print(f"    ❌ Error al conectar: {e}")
+                        log_instalador(f"    ❌ Error al conectar: {e}", "ERROR")
                         raise Exception(f"Error conectando a MySQL: {str(e)}")
                         
             except Exception as e:
-                print(f"    ❌ Error MySQL: {e}")
+                log_instalador(f"    ❌ Error MySQL: {e}", "ERROR")
                 raise Exception(f"Error con MySQL: {str(e)}")
             
             # 3. Crear tablas en MySQL
-            print("\n[3/7] Creando tablas...")
+            log_instalador("[3/8] Creando tablas...")
             try:
                 exito, msg = crear_tablas_mysql(self.config_db)
                 if not exito:
-                    print(f"    ❌ Error: {msg}")
+                    log_instalador(f"    ❌ Error: {msg}", "ERROR")
                     raise Exception(f"Error creando tablas:\n{msg}")
-                print("    ✅ Tablas creadas correctamente")
+                log_instalador("    ✅ Tablas creadas correctamente")
             except Exception as e:
-                print(f"    ❌ Excepción: {str(e)}")
-                import traceback
-                traceback.print_exc()
+                log_instalador(f"    ❌ Excepción: {str(e)}", "ERROR")
+                log_instalador(traceback.format_exc(), "ERROR")
                 raise
             
             # 4. Guardar configuración de licencia
-            print("\n[4/7] Guardando licencia...")
+            log_instalador("[4/8] Guardando licencia...")
             try:
                 licencia_model = LicenciaModel(db)
                 licencia_model.guardar_config_licencia(self.config_licencia)
-                print("    ✅ Licencia guardada")
+                log_instalador("    ✅ Licencia guardada")
             except Exception as e:
-                print(f"    ❌ Error: {str(e)}")
+                log_instalador(f"    ❌ Error: {str(e)}", "ERROR")
                 raise
             
             # 5. Guardar configuración de BD
-            print("\n[5/7] Guardando configuración...")
+            log_instalador("[5/8] Guardando configuración...")
             try:
                 ConfigModel.guardar_config_db(self.config_db)
-                print("    ✅ Configuración guardada")
+                log_instalador("    ✅ Configuración guardada")
             except Exception as e:
-                print(f"    ❌ Error: {str(e)}")
+                log_instalador(f"    ❌ Error: {str(e)}", "ERROR")
                 raise
             
             # 6. Guardar tipos de falla personalizados
-            print("\n[6/7] Guardando tipos de falla...")
+            log_instalador("[6/8] Guardando tipos de falla...")
             try:
                 if self.tipos_falla_instalacion:
-                    # Asegurarse de que cada tipo tenga nombre y color
                     tipos_validos = []
                     for tipo in self.tipos_falla_instalacion:
                         if tipo.get("nombre") and tipo.get("color"):
                             tipos_validos.append(tipo)
-                            print(f"    Guardando: {tipo['nombre']} - {tipo['color']}")
+                            log_instalador(f"    Guardando: {tipo['nombre']} - {tipo['color']}")
                     
                     if tipos_validos:
                         falla_model = FallaModel(db)
                         falla_model.guardar_tipos_falla(tipos_validos)
-                        print(f"    ✅ {len(tipos_validos)} tipos de falla guardados con sus colores")
+                        log_instalador(f"    ✅ {len(tipos_validos)} tipos de falla guardados con sus colores")
                     else:
-                        print("    ⚠️ No hay tipos válidos para guardar")
+                        log_instalador("    ⚠️ No hay tipos válidos para guardar")
             except Exception as e:
-                print(f"    ❌ Error: {str(e)}")
+                log_instalador(f"    ❌ Error: {str(e)}", "ERROR")
                 raise
             
             # 7. Guardar configuración del sistema
-            print("\n[7/7] Guardando configuración del sistema...")
+            log_instalador("[7/8] Guardando configuración del sistema...")
             try:
                 config_sistema_default = {
                     "nombre_sistema": "ANDON SYSTEM",
@@ -795,39 +833,39 @@ class InstaladorAndon:
                 }
                 config_model = ConfigModel(db)
                 config_model.guardar_config_sistema(config_sistema_default)
-                print("    ✅ Configuración del sistema guardada")
+                log_instalador("    ✅ Configuración del sistema guardada")
             except Exception as e:
-                print(f"    ❌ Error: {str(e)}")
+                log_instalador(f"    ❌ Error: {str(e)}", "ERROR")
                 raise
             
             # 8. Guardar mapeo de botones (si existe)
             if hasattr(self, 'mapeo_instalacion') and self.mapeo_instalacion:
-                print("\n[8/8] Guardando mapeo de botones...")
+                log_instalador("[8/8] Guardando mapeo de botones...")
                 try:
                     falla_model = FallaModel(db)
                     falla_model.guardar_mapeo_botones(self.mapeo_instalacion)
-                    print(f"    ✅ {len(self.mapeo_instalacion)} asignaciones guardadas")
+                    log_instalador(f"    ✅ {len(self.mapeo_instalacion)} asignaciones guardadas")
                 except Exception as e:
-                    print(f"    ❌ Error: {str(e)}")
-                    # No raise, es opcional
+                    log_instalador(f"    ❌ Error: {str(e)}", "ERROR")
             else:
-                print("\n[8/8] Sin mapeo de botones para guardar")
+                log_instalador("[8/8] Sin mapeo de botones para guardar")
             
-            print("\n" + "="*50)
-            print("✅ INSTALACIÓN COMPLETADA EXITOSAMENTE")
-            print("="*50 + "\n")
+            log_instalador("="*50)
+            log_instalador("✅ INSTALACIÓN COMPLETADA EXITOSAMENTE")
+            log_instalador("="*50)
             
             messagebox.showinfo("✅ INSTALACIÓN COMPLETADA", 
-                            "El sistema se ha instalado correctamente.\n\nLa aplicación se iniciará ahora.")
+                            f"El sistema se ha instalado correctamente.\n\n"
+                            f"La aplicación se iniciará ahora.\n\n"
+                            f"Log de instalación guardado en:\n{LOG_FILE}")
             
             self.root.destroy()
             self.iniciar_aplicacion()
             
         except mysql.connector.Error as e:
             error_msg = str(e)
-            print(f"\n❌ ERROR MySQL: {error_msg}")
-            import traceback
-            traceback.print_exc()
+            log_instalador(f"\n❌ ERROR MySQL: {error_msg}", "ERROR")
+            log_instalador(traceback.format_exc(), "ERROR")
             
             if "1045" in error_msg:
                 user_msg = "Usuario o contraseña incorrectos para MySQL"
@@ -840,16 +878,15 @@ class InstaladorAndon:
             
             messagebox.showerror("❌ ERROR DE INSTALACIÓN", 
                             f"Ocurrió un error en MySQL:\n\n{user_msg}\n\n"
-                            "Verifica la instalación de MySQL e intenta de nuevo.\n\n"
-                            "Revisa la consola para más detalles.")
+                            f"Verifica la instalación de MySQL e intenta de nuevo.\n\n"
+                            f"Revisa el archivo de log para más detalles:\n{LOG_FILE}")
             
         except Exception as e:
-            print(f"\n❌ ERROR GENERAL: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            log_instalador(f"\n❌ ERROR GENERAL: {str(e)}", "ERROR")
+            log_instalador(traceback.format_exc(), "ERROR")
             messagebox.showerror("❌ ERROR DE INSTALACIÓN", 
                             f"Ocurrió un error inesperado:\n\n{str(e)}\n\n"
-                            "Revisa la consola para más detalles.")
+                            f"Revisa el archivo de log para más detalles:\n{LOG_FILE}")
     
     def iniciar_aplicacion(self):
         """Inicia la aplicación principal"""
@@ -857,16 +894,14 @@ class InstaladorAndon:
             from src.main import main
             main()
         except Exception as e:
-            print(f"❌ Error al iniciar aplicación: {e}")
-            import traceback
-            traceback.print_exc()
+            log_instalador(f"❌ Error al iniciar aplicación: {e}", "ERROR")
             messagebox.showerror("Error Crítico", 
-                                f"No se pudo iniciar la aplicación:\n{str(e)}")
+                                f"No se pudo iniciar la aplicación:\n{str(e)}\n\n"
+                                f"Revisa el archivo de log:\n{LOG_FILE}")
 
 if __name__ == "__main__":
     # Verificar si ya está instalado
     if os.path.exists("db_config.json"):
-        # Ya instalado, iniciar directamente la app
         try:
             from src.main import main
             main()
@@ -877,5 +912,4 @@ if __name__ == "__main__":
             messagebox.showerror("Error Crítico", 
                                 f"No se pudo iniciar la aplicación:\n{str(e)}")
     else:
-        # No instalado, ejecutar instalador
         InstaladorAndon()

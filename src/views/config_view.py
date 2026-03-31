@@ -625,7 +625,7 @@ class ConfigView:
                  command=self._cerrar).pack(side="right", padx=5)
         
     def _probar_conexion(self):
-        """Prueba la conexión a MySQL"""
+        """Prueba la conexión a MySQL con mejor manejo de errores"""
         config = {
             "host": self.db_host_var.get(),
             "port": int(self.db_port_var.get()),
@@ -638,7 +638,15 @@ class ConfigView:
         
         def test():
             try:
+                # Intentar importar mysql.connector dentro del hilo
                 import mysql.connector
+                from mysql.connector import Error as MySQLError
+                
+                # Mostrar mensaje de inicio
+                self.ventana.after(0, lambda: self.db_estado_label.config(
+                    text="⏳ Probando conexión...", fg=self.theme.colores["warning"]))
+                
+                # Intentar conectar
                 conn = mysql.connector.connect(
                     host=config["host"],
                     port=config["port"],
@@ -646,19 +654,64 @@ class ConfigView:
                     password=config["password"],
                     database=config["base_datos"],
                     connection_timeout=config["timeout"],
-                    ssl_disabled=not config["usar_ssl"]
+                    ssl_disabled=not config["usar_ssl"],
+                    use_pure=True  # Forzar implementación pura de Python
                 )
                 conn.close()
+                
+                # Conexión exitosa
                 self.ventana.after(0, lambda: self.db_estado_label.config(
                     text="✅ Conexión exitosa", fg=self.theme.colores["success"]))
-                self.ventana.after(0, lambda: messagebox.showinfo("Éxito", "Conexión exitosa"))
-            except Exception as e:
+                self.ventana.after(0, lambda: messagebox.showinfo("Éxito", "Conexión a MySQL exitosa"))
+                
+            except ImportError as e:
+                # Error de importación de mysql.connector
+                error_msg = "No se pudo importar mysql.connector. Verifica la instalación."
                 self.ventana.after(0, lambda: self.db_estado_label.config(
-                    text=f"❌ Error: {str(e)[:50]}", fg=self.theme.colores["danger"]))
-                self.ventana.after(0, lambda: messagebox.showerror("Error", f"No se pudo conectar:\n{str(e)}"))
+                    text=f"❌ {error_msg}", fg=self.theme.colores["danger"]))
+                self.ventana.after(0, lambda: messagebox.showerror("Error", 
+                    f"{error_msg}\n\nDetalle: {str(e)}\n\n"
+                    f"Reinstala la aplicación o contacta a soporte."))
+                
+            except mysql.connector.Error as e:
+                # Error específico de MySQL
+                error_code = e.errno if hasattr(e, 'errno') else 0
+                error_msg = str(e)
+                
+                # Mensajes de error más amigables
+                if error_code == 1045:
+                    user_msg = "Usuario o contraseña incorrectos"
+                elif error_code == 1049:
+                    user_msg = "La base de datos no existe"
+                elif error_code == 2003:
+                    user_msg = "No se pudo conectar al servidor MySQL. ¿Está corriendo?"
+                elif error_code == 2005:
+                    user_msg = f"Host desconocido: {config['host']}"
+                else:
+                    user_msg = f"Error MySQL: {error_msg}"
+                
+                self.ventana.after(0, lambda: self.db_estado_label.config(
+                    text=f"❌ {user_msg[:50]}", fg=self.theme.colores["danger"]))
+                self.ventana.after(0, lambda: messagebox.showerror("Error de Conexión", 
+                    f"{user_msg}\n\nDetalles técnicos:\n{error_msg}"))
+                
+            except Exception as e:
+                # Cualquier otro error
+                error_msg = str(e)
+                self.ventana.after(0, lambda: self.db_estado_label.config(
+                    text=f"❌ Error: {error_msg[:50]}", fg=self.theme.colores["danger"]))
+                self.ventana.after(0, lambda: messagebox.showerror("Error Inesperado", 
+                    f"Error al conectar:\n{error_msg}\n\n"
+                    f"Configuración:\n"
+                    f"Host: {config['host']}\n"
+                    f"Puerto: {config['port']}\n"
+                    f"Base de datos: {config['base_datos']}\n"
+                    f"Usuario: {config['usuario']}"))
         
+        # Ejecutar en hilo separado para no bloquear la UI
+        import threading
         threading.Thread(target=test, daemon=True).start()
-        
+    
     def _cambiar_nombre(self):
         """Cambia el nombre del sistema"""
         nuevo = self.entry_nombre.get().strip()
