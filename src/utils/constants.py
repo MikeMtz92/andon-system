@@ -65,7 +65,8 @@ PROYECCION_DEFAULT = {
     "color_texto": "#FFFFFF",
     "color_acento": "#e94560",
     "color_exito": "#4CAF50",
-    "mostrar_pendientes": True
+    "mostrar_pendientes": True,
+    "font_size": 16
 }
 
 CONTADOR_DEFAULT = {

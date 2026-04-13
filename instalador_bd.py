@@ -194,6 +194,7 @@ def crear_tablas_mysql(config_mysql):
                     color_acento VARCHAR(20) DEFAULT '#e94560',
                     color_exito VARCHAR(20) DEFAULT '#4CAF50',
                     mostrar_pendientes BOOLEAN DEFAULT TRUE,
+                    font_size INT DEFAULT 16,
                     CONSTRAINT chk_proyeccion_id CHECK (id = 1)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ''')

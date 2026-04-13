@@ -529,7 +529,7 @@ class AndonView(tk.Frame):
     def _mostrar_menu_contexto(self, event, alerta):
         """Muestra menú contextual para una falla"""
         menu = tk.Menu(self, tearoff=0, bg=self.theme.colores["card"], 
-                      fg=self.theme.colores["texto"])
+                    fg=self.theme.colores["texto"])
         
         estado = alerta.get("estado", "activa")
         licencia = self.controller.licencia_controller
@@ -537,23 +537,23 @@ class AndonView(tk.Frame):
         # Opción ver nota si existe
         if "nota_pendiente" in alerta and alerta["nota_pendiente"]:
             menu.add_command(label="📋 Ver Nota", 
-                           command=lambda: self._mostrar_nota(alerta))
+                        command=lambda: self._mostrar_nota(alerta))
 
         # Opción agregar/editar nota (solo PRO)
         if licencia.puede_agregar_notas:
             if "nota_pendiente" in alerta and alerta["nota_pendiente"]:
                 menu.add_command(label="✏️ Editar Nota", 
-                               command=lambda: self._editar_nota(alerta))
+                            command=lambda: self._editar_nota(alerta))
             else:
                 menu.add_command(label="📝 Agregar Nota", 
-                               command=lambda: self._editar_nota(alerta))
+                            command=lambda: self._editar_nota(alerta))
 
         # Opciones según estado
         if estado == "activa":
             if menu.index("end") is not None:
                 menu.add_separator()
             menu.add_command(label="🟡 Marcar en Proceso", 
-                           command=lambda: self.falla_controller.marcar_en_proceso(alerta))
+                        command=lambda: self.falla_controller.marcar_en_proceso(alerta))
 
         elif estado == "en_proceso":
             if menu.index("end") is not None:
@@ -561,16 +561,17 @@ class AndonView(tk.Frame):
             
             if licencia.puede_usar_pendientes:
                 menu.add_command(label="🟠 Marcar como Pendiente", 
-                               command=lambda: self._marcar_pendiente(alerta))
+                            command=lambda: self._marcar_pendiente(alerta))
             
             menu.add_command(label="✅ Finalizar Falla", 
-                           command=lambda: self.falla_controller.finalizar_falla(alerta))
+                        command=lambda: self.falla_controller.finalizar_falla(alerta))
 
         elif estado == "pendiente":
             if menu.index("end") is not None:
                 menu.add_separator()
-            menu.add_command(label="✅ Resolver Pendiente",  # <-- Agregar emoji ✅
-                        command=lambda: self.falla_controller.finalizar_falla(alerta))
+            # Cambiar para abrir diálogo de edición antes de finalizar
+            menu.add_command(label="✅ Finalizar Pendiente", 
+                        command=lambda: self._finalizar_pendiente_con_nota(alerta))
 
         if menu.index("end") is not None:
             try:
@@ -578,6 +579,126 @@ class AndonView(tk.Frame):
             finally:
                 menu.grab_release()
                 
+    def _finalizar_pendiente_con_nota(self, alerta):
+        """Abre diálogo para editar nota antes de finalizar falla pendiente"""
+        self._mostrar_dialogo_finalizar_pendiente(alerta)
+
+    def _mostrar_dialogo_finalizar_pendiente(self, alerta):
+        """Muestra un diálogo para editar/agregar nota antes de finalizar falla pendiente"""
+        root_window = self.root
+        
+        dialog = tk.Toplevel(root_window)
+        dialog.title("Finalizar Falla Pendiente")
+        dialog.geometry("550x500")
+        dialog.configure(bg=self.theme.colores["fondo"])
+        dialog.transient(root_window)
+        dialog.grab_set()
+        
+        # Centrar diálogo
+        dialog.update_idletasks()
+        x = root_window.winfo_x() + (root_window.winfo_width() // 2) - (550 // 2)
+        y = root_window.winfo_y() + (root_window.winfo_height() // 2) - (500 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        # Título
+        tk.Label(dialog,
+                text="✅ Finalizar Falla Pendiente",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 16, "bold")).pack(pady=20)
+        
+        # Información de la falla
+        info_frame = tk.Frame(dialog, bg=self.theme.colores["card"])
+        info_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(info_frame,
+                text=f"Máquina: {alerta['maquina']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=10, pady=5)
+        
+        tk.Label(info_frame,
+                text=f"Tipo: {alerta['tipo']}",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11)).pack(anchor="w", padx=10, pady=5)
+        
+        if alerta.get("fecha_pendiente"):
+            tk.Label(info_frame,
+                    text=f"Marcada como Pendiente: {alerta['fecha_pendiente']}",
+                    bg=self.theme.colores["card"],
+                    fg=self.theme.colores["texto_secundario"],
+                    font=("Segoe UI", 10)).pack(anchor="w", padx=10, pady=5)
+        
+        # Área de nota
+        tk.Label(dialog,
+                text="Nota / Resolución de la falla:",
+                bg=self.theme.colores["fondo"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold")).pack(pady=(20, 5))
+        
+        texto_nota = tk.Text(dialog,
+                            height=10,
+                            width=60,
+                            bg=self.theme.colores.get("superficie3", "#2d3047"),
+                            fg=self.theme.colores["texto"],
+                            font=("Segoe UI", 10),
+                            wrap="word")
+        texto_nota.pack(padx=20, pady=5)
+        
+        # Si ya existe una nota, mostrarla
+        if "nota_pendiente" in alerta and alerta["nota_pendiente"]:
+            texto_nota.insert("1.0", alerta["nota_pendiente"])
+        
+        # Frame para botones
+        btn_frame = tk.Frame(dialog, bg=self.theme.colores["fondo"])
+        btn_frame.pack(pady=20)
+        
+        def guardar_y_finalizar():
+            nota = texto_nota.get("1.0", tk.END).strip()
+            if not nota:
+                respuesta = messagebox.askyesno(
+                    "Nota vacía",
+                    "No has agregado ninguna nota. ¿Deseas finalizar la falla sin nota?",
+                    parent=dialog
+                )
+                if not respuesta:
+                    return
+            
+            dialog.destroy()
+            # Finalizar con la nota actualizada
+            self.falla_controller.finalizar_falla(alerta, nota_actualizada=nota)
+            
+            # Actualizar vistas
+            self.actualizar_tabla()
+            self.update_stats()
+            
+            messagebox.showinfo("✅ Completado", 
+                            "Falla pendiente finalizada correctamente.",
+                            parent=root_window)
+        
+        tk.Button(btn_frame,
+                text="✅ Guardar Nota y Finalizar",
+                bg=self.theme.colores["success"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11, "bold"),
+                relief="flat",
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=guardar_y_finalizar).pack(side="left", padx=5)
+        
+        tk.Button(btn_frame,
+                text="❌ Cancelar",
+                bg=self.theme.colores["danger"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 11),
+                relief="flat",
+                padx=20,
+                pady=8,
+                cursor="hand2",
+                command=dialog.destroy).pack(side="left", padx=5)
+                     
     def _mostrar_nota_pendiente(self, alerta):
         """Muestra la nota completa de una falla pendiente"""
         dialog = tk.Toplevel(self.root)

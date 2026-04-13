@@ -116,7 +116,7 @@ class ExcelService:
             self._agregar_grafica_proceso_fin(df, wb)
             
             # ===== GRÁFICA 7: Fallas Pendientes (solo las que fueron pendientes) =====
-            self._agregar_grafica_fallas_por_estado(df, wb)
+            #self._agregar_grafica_fallas_por_estado(df, wb)
             
             # ===== GRÁFICA 8: Tiempo Pendiente a Fin por Tipo =====
             self._agregar_grafica_tiempo_pendiente_fin(df, wb)

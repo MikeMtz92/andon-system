@@ -260,9 +260,22 @@ class FallaController:
         if self.on_estadisticas_actualizadas:
             self.on_estadisticas_actualizadas()
 
-    def finalizar_falla(self, alerta: Dict):
-        """Finaliza una falla manualmente"""
+    def finalizar_falla(self, alerta: Dict, nota_actualizada: str = None, callback=None):
+        """Finaliza una falla manualmente, con opción de actualizar nota si es pendiente"""
         ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Si es pendiente y se proporcionó callback, abrir diálogo de nota
+        if alerta.get("estado") == "pendiente" and callback:
+            callback(alerta)
+            return
+        
+        # Si es pendiente y se proporcionó una nota actualizada, actualizarla
+        if alerta.get("estado") == "pendiente" and nota_actualizada is not None:
+            alerta["nota_pendiente"] = nota_actualizada
+            alerta["fecha_pendiente"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            # Guardar el cambio en BD
+            self.falla_model.guardar_falla_activa(alerta)
+            logger.info(f"Falla pendiente #{alerta.get('numero_falla')} actualizada con nota")
         
         if "proceso" not in alerta or not alerta["proceso"]:
             alerta["proceso"] = ahora
@@ -295,7 +308,7 @@ class FallaController:
                 self.on_estadisticas_actualizadas()
         else:
             logger.error(f"Error al guardar falla #{alerta.get('numero_falla')} en historial")
-        
+         
     def marcar_pendiente(self, alerta: Dict, nota: str):
         """Marca una falla como pendiente con nota"""
         if not self.licencia.puede_usar_pendientes:

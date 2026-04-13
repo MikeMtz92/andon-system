@@ -32,11 +32,28 @@ class MainView:
         self._setup_ui()
         self._setup_styles()
         
+        # Actualizar el logo con el nombre guardado en BD
+        self._actualizar_nombre_sistema()
+        
         if hasattr(controller, '_reproducir_alarma'):
             controller.falla_controller.on_alarma = controller._reproducir_alarma
         
         # Mostrar vista principal por defecto
         self.show_andon_view()
+        
+    
+    def _actualizar_nombre_sistema(self):
+        """Actualiza el logo con el nombre del sistema desde la BD"""
+        try:
+            config_sistema = self.controller.config_model.cargar_config_sistema()
+            nombre = config_sistema.get("nombre_sistema", "ANDON SYSTEM")
+            self.theme.colores["nombre_sistema"] = nombre
+            self.theme.paleta_actual["nombre_sistema"] = nombre
+            if hasattr(self, 'logo_label'):
+                self.logo_label.config(text=f"⚙️ {nombre}")
+            logger.info(f"Nombre del sistema actualizado: {nombre}")
+        except Exception as e:
+            logger.error(f"Error actualizando nombre del sistema: {e}")
         
         
     def _on_closing(self):

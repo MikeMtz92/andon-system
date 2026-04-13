@@ -1,0 +1,10 @@
+{
+    "sonidos": {
+        "Mantenimientos": "C:/Users/maik_/Desktop/tonos/universfield-clear-mobile-notification-487900.mp3",
+        "Producción": "C:/Users/maik_/Desktop/tonos/universfield-new-notification-011-364050.mp3",
+        "Calidad": "C:/Users/maik_/Desktop/tonos/universfield-new-notification-057-494255.mp3",
+        "Materiales": "C:/Users/maik_/Desktop/tonos/universfield-new-notification-059-494262.mp3",
+        "Ingenieria2": "C:/Users/maik_/Desktop/tonos/universfield-new-notification-063-494543.mp3"
+    },
+    "habilitados": true
+}

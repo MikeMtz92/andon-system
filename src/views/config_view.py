@@ -39,13 +39,15 @@ class ConfigView:
         # Variables para configuración
         self._inicializar_variables()
         self._setup_ui()
+        
+        # Recargar nombre del sistema desde BD (para asegurar que muestra el último guardado)
+        self._recargar_nombre_sistema()
     
         # Forzar actualización de la ventana
         self.ventana.update_idletasks()
         self.ventana.update()
         
         print("DEBUG: ConfigView completamente inicializada")
-
         
     def _inicializar_variables(self):
         """Inicializa las variables de la UI"""
@@ -284,40 +286,41 @@ class ConfigView:
                  pady=5,
                  cursor="hand2",
                  command=self._cambiar_nombre).pack(side="left")
+                
     def _crear_seccion_tipos_falla(self, parent):
-        """Crea la sección de tipos de falla"""
+        """Crea la sección de tipos de falla respetando el límite de licencia"""
         print("DEBUG: _crear_seccion_tipos_falla INICIADO")
         
         card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1,
                     highlightbackground=self.theme.colores["texto_secundario"])
         card.pack(fill="x", padx=10, pady=(0, 15))
         
-        # Límite de licencia
+        # Obtener límite de la licencia actual
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
+        
+        # Obtener tipos desde la BD (todos los que existen)
+        tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
+        print(f"DEBUG: tipos_data obtenido: {tipos_data}")
+        
+        tipos_actuales = len(tipos_data)
+        print(f"DEBUG: tipos_actuales={tipos_actuales}, max_tipos={max_tipos}")
+        
+        # Mostrar límite en la interfaz
+        color_limite = self.theme.colores["success"] if tipos_actuales <= max_tipos else self.theme.colores["danger"]
+        
         limite_frame = tk.Frame(card, bg=self.theme.colores["card"])
         limite_frame.pack(fill="x", padx=15, pady=(10, 0))
         
-        try:
-            tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
-            print(f"DEBUG: tipos_data obtenido: {tipos_data}")
-            tipos_actuales = len(tipos_data)
-        except Exception as e:
-            print(f"ERROR obteniendo tipos: {e}")
-            tipos_actuales = 0
-        
-        max_tipos = self.controller.licencia_controller.max_tipos_falla
-        print(f"DEBUG: tipos_actuales={tipos_actuales}, max_tipos={max_tipos}")
-        
-        color_limite = self.theme.colores["success"] if tipos_actuales < max_tipos else self.theme.colores["danger"]
-        
         tk.Label(limite_frame,
-                text=f"📊 Tipos de falla permitidos: {tipos_actuales}/{max_tipos}",
+                text=f"📊 Tipos de falla permitidos por licencia: {max_tipos}",
                 bg=self.theme.colores["card"],
                 fg=color_limite,
                 font=("Segoe UI", 11, "bold")).pack(anchor="w")
         
-        if tipos_actuales >= max_tipos:
+        # Mostrar advertencia si hay más tipos que los permitidos
+        if tipos_actuales > max_tipos:
             tk.Label(limite_frame,
-                    text="⚠️ Límite alcanzado. Elimina algún tipo para agregar más.",
+                    text=f"⚠️ Hay {tipos_actuales - max_tipos} tipo(s) extra que exceden tu licencia. Elimínalos para continuar.",
                     bg=self.theme.colores["card"],
                     fg=self.theme.colores["warning"],
                     font=("Segoe UI", 9, "italic")).pack(anchor="w", pady=(2, 5))
@@ -328,41 +331,54 @@ class ConfigView:
                 fg=self.theme.colores["texto"],
                 font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(5, 10))
         
-        # Lista de tipos
+        # Lista de tipos - SOLO MOSTRAR LOS QUE CABEN EN EL LÍMITE
         self.tipos_list_frame = tk.Frame(card, bg=self.theme.colores["card"])
         self.tipos_list_frame.pack(fill="x", padx=15, pady=5)
         
         print("DEBUG: Llamando a _cargar_lista_tipos")
         self._cargar_lista_tipos()
         
-        # Botón agregar tipo
+        # Botón agregar tipo - solo si no se ha alcanzado el límite
         btn_frame = tk.Frame(card, bg=self.theme.colores["card"])
         btn_frame.pack(fill="x", padx=15, pady=(10, 15))
         
-        tk.Button(btn_frame,
-                text="➕ Agregar Tipo",
-                bg=self.theme.colores["success"],
-                fg=self.theme.colores["texto"],
-                font=("Segoe UI", 9),
-                relief="flat",
-                padx=10,
-                pady=5,
-                cursor="hand2",
-                command=self._agregar_tipo).pack(side="left", padx=5)
+        if tipos_actuales < max_tipos:
+            tk.Button(btn_frame,
+                    text="➕ Agregar Tipo",
+                    bg=self.theme.colores["success"],
+                    fg=self.theme.colores["texto"],
+                    font=("Segoe UI", 9),
+                    relief="flat",
+                    padx=10,
+                    pady=5,
+                    cursor="hand2",
+                    command=self._agregar_tipo).pack(side="left", padx=5)
+        else:
+            tk.Label(btn_frame,
+                    text=f"Límite de {max_tipos} tipos alcanzado. Elimina algún tipo para agregar más.",
+                    bg=self.theme.colores["card"],
+                    fg=self.theme.colores["warning"],
+                    font=("Segoe UI", 9, "italic")).pack(anchor="w")
         
         print("DEBUG: _crear_seccion_tipos_falla FINALIZADO")
     
     def _cargar_lista_tipos(self):
-        """Carga la lista de tipos de falla con sus colores"""
+        """Carga la lista de tipos de falla con sus colores, respetando el límite de licencia"""
         for widget in self.tipos_list_frame.winfo_children():
             widget.destroy()
         
+        # Obtener límite de licencia
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
+        
         tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
+        
+        # Limitar los tipos mostrados al límite de la licencia
+        tipos_mostrar = tipos_data[:max_tipos]
         
         # Guardar referencias para poder editar
         self.tipos_editables = []
         
-        for i, tipo in enumerate(tipos_data):
+        for i, tipo in enumerate(tipos_mostrar):
             frame = tk.Frame(self.tipos_list_frame, bg=self.theme.colores["card"])
             frame.pack(fill="x", pady=2)
             
@@ -427,7 +443,7 @@ class ConfigView:
                 "entry_var": entry_var,
                 "color_label": color_label,
                 "color_original": tipo["color"],
-                "color_guardado": tipo["color"]  # <-- AGREGAR ESTA LÍNEA
+                "color_guardado": tipo["color"]
             })
         
         # Botón para guardar todos los cambios
@@ -444,8 +460,19 @@ class ConfigView:
         btn_guardar_tipos.pack(pady=10)
 
     def _guardar_cambios_tipos(self):
-        """Guarda todos los cambios de nombres y colores de tipos de falla"""
+        """Guarda todos los cambios de nombres y colores de tipos de falla, respetando límite de licencia"""
         try:
+            max_tipos = self.controller.licencia_controller.max_tipos_falla
+            
+            # Verificar que no se exceda el límite después de guardar
+            if len(self.tipos_editables) > max_tipos:
+                messagebox.showerror("Error", 
+                                    f"Tu licencia solo permite {max_tipos} tipos de falla.\n"
+                                    f"Actualmente tienes {len(self.tipos_editables)} tipos.\n"
+                                    "Elimina algunos tipos antes de guardar.",
+                                    parent=self.ventana)
+                return
+            
             conn = self.controller.db.get_connection()
             if not conn:
                 messagebox.showerror("Error", "No se pudo conectar a la base de datos", parent=self.ventana)
@@ -453,12 +480,12 @@ class ConfigView:
             
             cursor = conn.cursor()
             cambios_realizados = False
-            tipos_actualizados = []  # Para registrar qué tipos cambiaron
+            tipos_actualizados = []
             
             for tipo_data in self.tipos_editables:
                 nuevo_nombre = tipo_data["entry_var"].get().strip()
                 nombre_original = tipo_data["nombre_original"]
-                nuevo_color = tipo_data["color_original"]  # Color actual después de cambios visuales
+                nuevo_color = tipo_data["color_original"]
                 color_guardado = tipo_data.get("color_guardado", nuevo_color)
                 
                 # Verificar si hubo cambios
@@ -558,95 +585,38 @@ class ConfigView:
                 conn.rollback()
                 conn.close()
     
-    def _guardar_cambio_nombre(self, index, nuevo_nombre, nombre_original):
-        """Guarda inmediatamente el cambio de nombre de un tipo de falla"""
-        if not nuevo_nombre or nuevo_nombre == nombre_original:
-            return
-        
-        # Verificar que no exista otro tipo con el mismo nombre
-        tipos_actuales = self.falla_controller.falla_model.cargar_tipos_falla()
-        for tipo in tipos_actuales:
-            if tipo["nombre"] == nuevo_nombre and tipo["nombre"] != nombre_original:
-                messagebox.showwarning("Nombre Duplicado", 
-                                    f"Ya existe un tipo de falla llamado '{nuevo_nombre}'.", 
-                                    parent=self.ventana)
-                # Revertir el cambio
-                self._recargar_lista_tipos()
-                return
-        
-        try:
-            # Actualizar en la base de datos
-            conn = self.controller.db.get_connection()
-            if conn:
-                cursor = conn.cursor()
-                # Actualizar el nombre en la tabla tipos_falla
-                cursor.execute("UPDATE tipos_falla SET nombre = %s WHERE nombre = %s", 
-                            (nuevo_nombre, nombre_original))
-                # Actualizar también en las tablas relacionadas
-                cursor.execute("UPDATE fallas SET tipo = %s WHERE tipo = %s", 
-                            (nuevo_nombre, nombre_original))
-                cursor.execute("UPDATE fallas_activas SET tipo = %s WHERE tipo = %s", 
-                            (nuevo_nombre, nombre_original))
-                cursor.execute("UPDATE mapeo_botones SET tipo_falla = %s WHERE tipo_falla = %s", 
-                            (nuevo_nombre, nombre_original))
-                cursor.execute("UPDATE sonidos_falla SET tipo_falla = %s WHERE tipo_falla = %s", 
-                            (nuevo_nombre, nombre_original))
-                conn.commit()
-                conn.close()
-                
-                logger.info(f"Tipo de falla renombrado: '{nombre_original}' -> '{nuevo_nombre}'")
-                
-                # Recargar la lista completa para actualizar
-                self._recargar_lista_tipos()
-                
-                # Actualizar también la lista de tipos en el controlador de fallas
-                self.falla_controller.cargar_estado_inicial()
-                
-                # ACTUALIZAR EL COMBO BOX DE MAPEO EN TIEMPO REAL
-                self._actualizar_combo_mapeo()
-                
-                # Actualizar también los combo boxes de sonidos si están visibles
-                self._actualizar_combo_sonidos()
-                
-                # Actualizar los botones de tipos en AndonView
-                if self.controller.main_view and self.controller.main_view.andon_view:
-                    self.controller.main_view.andon_view._cargar_tipos_falla()
-                    self.controller.main_view.andon_view._actualizar_botones_tipos()
-                    
-        except Exception as e:
-            logger.error(f"Error guardando cambio de nombre: {e}")
-            messagebox.showerror("Error", f"No se pudo guardar el cambio:\n{str(e)}", parent=self.ventana)
-            # Recargar para revertir visualmente
-            self._recargar_lista_tipos()
-            
     def _recargar_lista_tipos(self):
         """Recarga la lista de tipos de falla"""
         self._cargar_lista_tipos()
         self.ventana.update_idletasks()
-            
+    
     def _actualizar_combo_sonidos(self):
         """Actualiza los valores del combo box de sonidos (si existe la sección)"""
         if hasattr(self, 'sonido_vars'):
+            max_tipos = self.controller.licencia_controller.max_tipos_falla
             tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
-            tipos_nombres = [t["nombre"] for t in tipos_data]
+            tipos_nombres = [t["nombre"] for t in tipos_data[:max_tipos]]
             
             # Las claves de sonido_vars son los nombres de los tipos
-            # Si algún tipo ya no existe, eliminarlo
+            # Si algún tipo ya no existe o excede el límite, eliminarlo
             tipos_actuales = list(self.sonido_vars.keys())
             for tipo in tipos_actuales:
                 if tipo not in tipos_nombres:
-                    # El tipo fue renombrado o eliminado, eliminar la entrada de sonido
                     del self.sonido_vars[tipo]
             
             # Si hay tipos nuevos que no están en sonido_vars, agregarlos
             for tipo in tipos_nombres:
                 if tipo not in self.sonido_vars:
-                    # Agregar nuevo tipo a la sección de sonidos
                     self._agregar_fila_sonido(tipo)
-                    
+    
     def _agregar_fila_sonido(self, tipo):
         """Agrega una nueva fila a la sección de sonidos (llamado cuando se agrega un nuevo tipo)"""
         if not hasattr(self, 'sonidos_frame') or not self.sonidos_frame:
+            return
+        
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
+        # Solo agregar si está dentro del límite
+        if len(self.sonido_vars) >= max_tipos:
             return
         
         frame = tk.Frame(self.sonidos_frame, bg=self.theme.colores["card"])
@@ -706,11 +676,6 @@ class ConfigView:
         
         self.sonido_vars[tipo] = ruta_var
        
-    def _recargar_lista_tipos(self):
-        """Recarga la lista de tipos de falla"""
-        self._cargar_lista_tipos()
-        self.ventana.update_idletasks()
-
     def _cambiar_color_tipo(self, index, tipo, label):
         """Abre selector de color para un tipo (solo guarda en memoria, no en BD)"""
         color_actual = label.cget('bg')
@@ -754,10 +719,13 @@ class ConfigView:
         mapeo_frame = tk.Frame(card, bg=self.theme.colores["card"])
         mapeo_frame.pack(fill="x", padx=15, pady=5)
         
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
         tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
-        tipos_nombres = [t["nombre"] for t in tipos_data]
+        # Limitar los tipos al máximo permitido por la licencia
+        tipos_nombres = [t["nombre"] for t in tipos_data[:max_tipos]]
         
-        for i in range(1, 6):
+        # Mostrar solo hasta el número máximo de botones según la licencia
+        for i in range(1, max_tipos + 1):
             row = tk.Frame(mapeo_frame, bg=self.theme.colores["card"])
             row.pack(fill="x", pady=3)
             
@@ -771,7 +739,7 @@ class ConfigView:
             
             var = tk.StringVar()
             mapeo_actual = self.falla_controller.mapeo_botones.get(i, "")
-            if mapeo_actual:
+            if mapeo_actual in tipos_nombres:
                 var.set(mapeo_actual)
             
             combo = ttk.Combobox(row,
@@ -784,7 +752,7 @@ class ConfigView:
             self.mapeo_vars[i] = var
         
         info_label = tk.Label(card,
-                             text="Nota: El mapeo se guardará al presionar 'Guardar Configuración'",
+                             text=f"Nota: Tu licencia permite hasta {max_tipos} tipos de falla.",
                              bg=self.theme.colores["card"],
                              fg=self.theme.colores["warning"],
                              font=("Segoe UI", 9, "italic"))
@@ -1025,13 +993,56 @@ class ConfigView:
         threading.Thread(target=test, daemon=True).start()
     
     def _cambiar_nombre(self):
-        """Cambia el nombre del sistema"""
+        """Cambia el nombre del sistema y lo guarda inmediatamente"""
         nuevo = self.entry_nombre.get().strip()
-        if nuevo:
-            self.theme.colores["nombre_sistema"] = nuevo
-            self.theme.paleta_actual["nombre_sistema"] = nuevo
-            messagebox.showinfo("Éxito", f"Nombre cambiado a: {nuevo}")
+        if not nuevo:
+            messagebox.showwarning("Aviso", "El nombre no puede estar vacío", parent=self.ventana)
+            # Restaurar el nombre actual
+            self._recargar_nombre_sistema()
+            return
+        
+        try:
+            # Obtener configuración actual
+            config_sistema = self.theme.generar_config_sistema()
+            config_sistema["nombre_sistema"] = nuevo
             
+            # Guardar en la base de datos
+            if self.controller.config_model.guardar_config_sistema(config_sistema):
+                # Actualizar en memoria
+                self.theme.colores["nombre_sistema"] = nuevo
+                self.theme.paleta_actual["nombre_sistema"] = nuevo
+                
+                # Actualizar la interfaz principal
+                if self.controller.main_view:
+                    # Actualizar el logo en el sidebar
+                    if hasattr(self.controller.main_view, 'logo_label') and self.controller.main_view.logo_label:
+                        self.controller.main_view.logo_label.config(text=f"⚙️ {nuevo}")
+                
+                messagebox.showinfo("Éxito", f"Nombre cambiado a: {nuevo}", parent=self.ventana)
+            else:
+                messagebox.showerror("Error", "No se pudo guardar el nombre en la base de datos", parent=self.ventana)
+                # Restaurar el nombre actual
+                self._recargar_nombre_sistema()
+            
+        except Exception as e:
+            logger.error(f"Error guardando nombre del sistema: {e}")
+            messagebox.showerror("Error", f"No se pudo guardar el nombre:\n{str(e)}", parent=self.ventana)
+            # Restaurar el nombre actual
+            self._recargar_nombre_sistema()
+             
+    def _recargar_nombre_sistema(self):
+        """Recarga el nombre del sistema desde la base de datos"""
+        try:
+            config_sistema = self.controller.config_model.cargar_config_sistema()
+            nombre = config_sistema.get("nombre_sistema", "ANDON SYSTEM")
+            self.entry_nombre.delete(0, tk.END)
+            self.entry_nombre.insert(0, nombre)
+            # Actualizar también en el theme
+            self.theme.colores["nombre_sistema"] = nombre
+            self.theme.paleta_actual["nombre_sistema"] = nombre
+            logger.info(f"Nombre del sistema recargado: {nombre}")
+        except Exception as e:
+            logger.error(f"Error recargando nombre del sistema: {e}")
         
     def _eliminar_tipo(self, index, nombre):
         """Elimina un tipo de falla"""
@@ -1040,6 +1051,14 @@ class ConfigView:
                                 "Se eliminarán todos los registros asociados.", 
                                 parent=self.ventana):
             return
+        
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
+        tipos_actuales = len(self.falla_controller.falla_model.cargar_tipos_falla())
+        
+        # Verificar que después de eliminar no se quede con tipos extra que excedan el límite
+        # (esto ya se maneja al recargar, pero es una verificación adicional)
+        if tipos_actuales <= max_tipos and tipos_actuales - 1 < max_tipos:
+            pass
         
         try:
             conn = self.controller.db.get_connection()
@@ -1088,8 +1107,9 @@ class ConfigView:
           
     def _actualizar_combo_mapeo(self):
         """Actualiza los valores del combo box de mapeo de botones"""
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
         tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
-        tipos_nombres = [t["nombre"] for t in tipos_data]
+        tipos_nombres = [t["nombre"] for t in tipos_data[:max_tipos]]
         
         # Recorrer todos los widgets de la ventana para encontrar los combos
         def actualizar_widgets(widget):
@@ -1108,7 +1128,7 @@ class ConfigView:
         actualizar_widgets(self.ventana)      
       
     def _agregar_tipo(self):
-        """Agrega un nuevo tipo de falla"""
+        """Agrega un nuevo tipo de falla - respeta límite de licencia"""
         from src.utils.constants import FALLAS_DEFAULT, COLORES_DEFAULT
         
         max_tipos = self.controller.licencia_controller.max_tipos_falla
@@ -1116,7 +1136,8 @@ class ConfigView:
         
         if tipos_actuales >= max_tipos:
             messagebox.showwarning("Límite Alcanzado",
-                                f"Has alcanzado el límite de {max_tipos} tipos de falla",
+                                f"Has alcanzado el límite de {max_tipos} tipos de falla\n"
+                                "Elimina algún tipo para agregar más.",
                                 parent=self.ventana)
             return
         
@@ -1277,10 +1298,13 @@ class ConfigView:
             
             # 2. Guardar mapeo de botones
             nuevo_mapeo = {}
+            max_tipos = self.controller.licencia_controller.max_tipos_falla
             for num, var in self.mapeo_vars.items():
-                tipo = var.get().strip()
-                if tipo:
-                    nuevo_mapeo[num] = tipo
+                # Solo guardar mapeos para botones que están dentro del límite de la licencia
+                if num <= max_tipos:
+                    tipo = var.get().strip()
+                    if tipo:
+                        nuevo_mapeo[num] = tipo
             
             self.falla_controller.falla_model.guardar_mapeo_botones(nuevo_mapeo)
             self.falla_controller.mapeo_botones = nuevo_mapeo
@@ -1320,6 +1344,7 @@ class ConfigView:
         self.db_timeout_var.set(str(DB_CONFIG_DEFAULT["timeout"]))
         self.db_ssl_var.set(DB_CONFIG_DEFAULT["usar_ssl"])
         
+        # Restaurar nombre del sistema
         self.entry_nombre.delete(0, tk.END)
         self.entry_nombre.insert(0, "ANDON SYSTEM")
         
@@ -1333,8 +1358,22 @@ class ConfigView:
         # Actualizar combo box de mapeo
         self._actualizar_combo_mapeo()
         
-        messagebox.showinfo("✅ Listo", "Valores restaurados. Guarda la configuración para aplicar.", parent=self.ventana)
-        
+        # Guardar los cambios en la BD inmediatamente
+        try:
+            # Guardar configuración del sistema con nombre restaurado
+            config_sistema = self.theme.generar_config_sistema()
+            config_sistema["nombre_sistema"] = "ANDON SYSTEM"
+            self.controller.config_model.guardar_config_sistema(config_sistema)
+            
+            # Actualizar la interfaz principal
+            if self.controller.main_view and hasattr(self.controller.main_view, 'logo_label'):
+                self.controller.main_view.logo_label.config(text="⚙️ ANDON SYSTEM")
+                
+            messagebox.showinfo("✅ Listo", "Valores restaurados. Guarda la configuración para aplicar.", parent=self.ventana)
+        except Exception as e:
+            logger.error(f"Error restaurando valores por defecto: {e}")
+            messagebox.showerror("Error", f"No se pudieron restaurar los valores:\n{str(e)}", parent=self.ventana)
+            
     def _cerrar(self):
         """Cierra la ventana de configuración"""
         try:
@@ -1367,14 +1406,15 @@ class ConfigView:
         self.sonidos_frame = tk.Frame(card, bg=self.theme.colores["card"])
         self.sonidos_frame.pack(fill="x", padx=15, pady=5)
         
-        # Cargar tipos de falla
+        # Cargar tipos de falla respetando límite de licencia
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
         tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
         self.sonido_vars = {}
         
         # Cargar configuraciones existentes
         self.sonidos_configurados = self.falla_controller.sonidos_configurados
         
-        for tipo in tipos_data:
+        for tipo in tipos_data[:max_tipos]:
             nombre = tipo["nombre"]
             frame = tk.Frame(self.sonidos_frame, bg=self.theme.colores["card"])
             frame.pack(fill="x", pady=5)
@@ -1468,7 +1508,13 @@ class ConfigView:
     
     def _guardar_sonidos(self):
         """Guarda las configuraciones de sonido en la BD"""
+        max_tipos = self.controller.licencia_controller.max_tipos_falla
         for tipo, var in self.sonido_vars.items():
+            # Solo guardar para tipos dentro del límite
+            tipos_data = self.falla_controller.falla_model.cargar_tipos_falla()
+            if tipo not in [t["nombre"] for t in tipos_data[:max_tipos]]:
+                continue
+                
             ruta = var.get().strip()
             if ruta:
                 # Validar que el archivo existe

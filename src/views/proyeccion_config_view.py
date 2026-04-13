@@ -22,7 +22,7 @@ class ProyeccionConfigView:
         
         self.ventana = tk.Toplevel(parent)
         self.ventana.title("Configurar Proyección")
-        self.ventana.geometry("600x700")
+        self.ventana.geometry("600x750")
         self.ventana.configure(bg=self.theme.colores["fondo"])
         self.ventana.resizable(True, True)
         self.ventana.transient(parent)
@@ -34,8 +34,8 @@ class ProyeccionConfigView:
         # Centrar
         self.ventana.update_idletasks()
         x = parent.winfo_x() + (parent.winfo_width() // 2) - (600 // 2)
-        y = parent.winfo_y() + (parent.winfo_height() // 2) - (700 // 2)
-        self.ventana.geometry(f"600x700+{x}+{y}")
+        y = parent.winfo_y() + (parent.winfo_height() // 2) - (750 // 2)
+        self.ventana.geometry(f"600x750+{x}+{y}")
         
         self._setup_ui()
     
@@ -97,6 +97,9 @@ class ProyeccionConfigView:
         # ===== COLORES =====
         self._crear_seccion_colores(scrollable_frame)
         
+        # ===== TAMAÑO DE LETRA =====
+        self._crear_seccion_tamaño_letra(scrollable_frame)
+        
         # ===== VISUALIZACIÓN =====
         self._crear_seccion_visualizacion(scrollable_frame)
         
@@ -137,6 +140,81 @@ class ProyeccionConfigView:
                  pady=10,
                  cursor="hand2",
                  command=self._abrir_proyeccion).pack(side="right", padx=5)
+    
+    def _crear_seccion_tamaño_letra(self, parent):
+        """Crea la sección para ajustar el tamaño de letra"""
+        card = tk.Frame(parent, bg=self.theme.colores["card"], relief="flat", bd=1)
+        card.pack(fill="x", pady=(0, 15))
+        
+        tk.Label(card,
+                text="Tamaño de Letra",
+                bg=self.theme.colores["card"],
+                fg=self.theme.colores["texto"],
+                font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=15, pady=(15, 10))
+        
+        # Valor actual del tamaño de fuente
+        self.font_size_var = tk.IntVar(value=self.config.get("font_size", 16))
+        
+        # Frame para el control deslizante
+        slider_frame = tk.Frame(card, bg=self.theme.colores["card"])
+        slider_frame.pack(fill="x", padx=15, pady=5)
+        
+        # Label de vista previa
+        self.preview_label = tk.Label(
+            slider_frame,
+            text=f"Tamaño actual: {self.font_size_var.get()}px\nEjemplo: Texto de prueba",
+            bg=self.theme.colores["card"],
+            fg=self.theme.colores["texto"],
+            font=("Segoe UI", self.font_size_var.get()),
+            pady=10
+        )
+        self.preview_label.pack(pady=5)
+        
+        # Slider para tamaño
+        def on_slider_change(val):
+            size = int(float(val))
+            self.preview_label.config(
+                text=f"Tamaño actual: {size}px\nEjemplo: Texto de prueba",
+                font=("Segoe UI", size)
+            )
+            self.font_size_var.set(size)
+        
+        slider = tk.Scale(
+            slider_frame,
+            from_=10,
+            to=36,
+            orient="horizontal",
+            length=300,
+            bg=self.theme.colores["card"],
+            fg=self.theme.colores["texto"],
+            highlightbackground=self.theme.colores["card"],
+            troughcolor=self.theme.colores.get("superficie3", "#2d3047"),
+            command=on_slider_change
+        )
+        slider.set(self.font_size_var.get())
+        slider.pack(pady=5)
+        
+        # Label con rangos
+        range_frame = tk.Frame(slider_frame, bg=self.theme.colores["card"])
+        range_frame.pack(fill="x")
+        tk.Label(range_frame, text="Pequeño (10px)", bg=self.theme.colores["card"], fg="#888").pack(side="left")
+        tk.Label(range_frame, text="Grande (36px)", bg=self.theme.colores["card"], fg="#888").pack(side="right")
+        
+        # Botón reset
+        def resetear_fuente():
+            slider.set(16)
+            on_slider_change(16)
+        
+        tk.Button(slider_frame,
+                 text="🔄 Resetear (16px)",
+                 command=resetear_fuente,
+                 bg=self.theme.colores.get("superficie3", "#2d3047"),
+                 fg=self.theme.colores["texto"],
+                 font=("Segoe UI", 9),
+                 relief="flat",
+                 padx=10,
+                 pady=3,
+                 cursor="hand2").pack(pady=5)
     
     def _crear_seccion_colores(self, parent):
         """Crea la sección de colores"""
@@ -454,7 +532,8 @@ class ProyeccionConfigView:
             "mostrar_pendientes": self.mostrar_pendientes_var.get(),
             "pantalla_completa": (self.modo_var.get() == "completa"),
             "recordar_posicion": self.recordar_var.get(),
-            "monitor": self.monitor_var.get()
+            "monitor": self.monitor_var.get(),
+            "font_size": self.font_size_var.get()  # Guardar tamaño de fuente
         })
         
         if self.modo_var.get() == "ventana":

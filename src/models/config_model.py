@@ -152,6 +152,10 @@ class ConfigModel:
         from src.utils.constants import PROYECCION_DEFAULT
         config = PROYECCION_DEFAULT.copy()
         
+        # Asegurar que font_size esté en el default
+        if "font_size" not in config:
+            config["font_size"] = 16
+        
         conn = self.db.get_connection()
         if not conn:
             return config
@@ -181,37 +185,79 @@ class ConfigModel:
         
         try:
             cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE config_proyeccion SET
-                    pantalla_completa = %s,
-                    recordar_posicion = %s,
-                    x = %s,
-                    y = %s,
-                    ancho = %s,
-                    alto = %s,
-                    monitor = %s,
-                    color_fondo = %s,
-                    mostrar_contador = %s,
-                    color_texto = %s,
-                    color_acento = %s,
-                    color_exito = %s,
-                    mostrar_pendientes = %s
-                WHERE id = 1
-            ''', (
-                config["pantalla_completa"],
-                config["recordar_posicion"],
-                config["x"],
-                config["y"],
-                config["ancho"],
-                config["alto"],
-                config["monitor"],
-                config["color_fondo"],
-                config["mostrar_contador"],
-                config["color_texto"],
-                config["color_acento"],
-                config["color_exito"],
-                config.get("mostrar_pendientes", True)
-            ))
+            
+            # Verificar si la columna font_size existe
+            cursor.execute("SHOW COLUMNS FROM config_proyeccion LIKE 'font_size'")
+            tiene_font_size = cursor.fetchone() is not None
+            
+            if tiene_font_size:
+                cursor.execute('''
+                    UPDATE config_proyeccion SET
+                        pantalla_completa = %s,
+                        recordar_posicion = %s,
+                        x = %s,
+                        y = %s,
+                        ancho = %s,
+                        alto = %s,
+                        monitor = %s,
+                        color_fondo = %s,
+                        mostrar_contador = %s,
+                        color_texto = %s,
+                        color_acento = %s,
+                        color_exito = %s,
+                        mostrar_pendientes = %s,
+                        font_size = %s
+                    WHERE id = 1
+                ''', (
+                    config["pantalla_completa"],
+                    config["recordar_posicion"],
+                    config["x"],
+                    config["y"],
+                    config["ancho"],
+                    config["alto"],
+                    config["monitor"],
+                    config["color_fondo"],
+                    config["mostrar_contador"],
+                    config["color_texto"],
+                    config["color_acento"],
+                    config["color_exito"],
+                    config.get("mostrar_pendientes", True),
+                    config.get("font_size", 16)  # Nuevo campo
+                ))
+            else:
+                # Versión sin font_size (para compatibilidad)
+                cursor.execute('''
+                    UPDATE config_proyeccion SET
+                        pantalla_completa = %s,
+                        recordar_posicion = %s,
+                        x = %s,
+                        y = %s,
+                        ancho = %s,
+                        alto = %s,
+                        monitor = %s,
+                        color_fondo = %s,
+                        mostrar_contador = %s,
+                        color_texto = %s,
+                        color_acento = %s,
+                        color_exito = %s,
+                        mostrar_pendientes = %s
+                    WHERE id = 1
+                ''', (
+                    config["pantalla_completa"],
+                    config["recordar_posicion"],
+                    config["x"],
+                    config["y"],
+                    config["ancho"],
+                    config["alto"],
+                    config["monitor"],
+                    config["color_fondo"],
+                    config["mostrar_contador"],
+                    config["color_texto"],
+                    config["color_acento"],
+                    config["color_exito"],
+                    config.get("mostrar_pendientes", True)
+                ))
+            
             conn.commit()
             cursor.close()
             conn.close()
@@ -223,7 +269,7 @@ class ConfigModel:
                 conn.rollback()
                 conn.close()
             return False
-
+    
     # ===== CONFIGURACIÓN DE CONTADOR =====
     
     def cargar_config_contador(self) -> dict:

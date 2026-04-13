@@ -20,6 +20,10 @@ class ProyeccionView:
         # Configuración de proyección
         self.config = controller.config_proyeccion
         
+        # Asegurar que exista font_size en la configuración
+        if "font_size" not in self.config:
+            self.config["font_size"] = 16
+        
         # Crear ventana
         self.ventana = tk.Toplevel(parent)
         self.ventana.title(f"{self.theme.colores.get('nombre_sistema', 'ANDON SYSTEM')} - Vista de Proyección")
@@ -73,6 +77,17 @@ class ProyeccionView:
                  command=self._cerrar).pack(side="right", padx=5, pady=3)
         
         tk.Button(controles,
+                 text="🔤 Ajustar Letra",
+                 bg="#FF9800",
+                 fg="white",
+                 font=("Segoe UI", 9),
+                 relief="flat",
+                 padx=10,
+                 pady=3,
+                 cursor="hand2",
+                 command=self._ajustar_tamaño_letra).pack(side="right", padx=5, pady=3)
+        
+        tk.Button(controles,
                  text="💾 Guardar Posición",
                  bg="#4CAF50",
                  fg="white",
@@ -88,7 +103,120 @@ class ProyeccionView:
                 bg="#333333",
                 fg="#AAAAAA",
                 font=("Segoe UI", 8)).pack(side="left", padx=10, pady=3)
+    
+    def _ajustar_tamaño_letra(self):
+        """Muestra ventana para ajustar el tamaño de letra en tiempo real"""
+        dialog = tk.Toplevel(self.ventana)
+        dialog.title("Ajustar Tamaño de Letra")
+        dialog.geometry("400x300")
+        dialog.configure(bg="#1a1a2e")
+        dialog.transient(self.ventana)
+        dialog.grab_set()
         
+        dialog.update_idletasks()
+        x = self.ventana.winfo_x() + (self.ventana.winfo_width() // 2) - (400 // 2)
+        y = self.ventana.winfo_y() + (self.ventana.winfo_height() // 2) - (300 // 2)
+        dialog.geometry(f"+{x}+{y}")
+        
+        tk.Label(dialog,
+                text="🔤 Tamaño de Letra en Proyección",
+                bg="#1a1a2e",
+                fg="white",
+                font=("Segoe UI", 14, "bold")).pack(pady=15)
+        
+        # Valor actual
+        temp_size = tk.IntVar(value=self.config.get("font_size", 16))
+        
+        # Label de vista previa
+        preview_label = tk.Label(
+            dialog,
+            text=f"Tamaño actual: {temp_size.get()}px\nEjemplo: Texto de prueba",
+            bg="#1a1a2e",
+            fg="white",
+            font=("Segoe UI", temp_size.get()),
+            pady=15
+        )
+        preview_label.pack()
+        
+        # Slider
+        def on_change(val):
+            size = int(float(val))
+            preview_label.config(
+                text=f"Tamaño actual: {size}px\nEjemplo: Texto de prueba",
+                font=("Segoe UI", size)
+            )
+            temp_size.set(size)
+        
+        slider = tk.Scale(
+            dialog,
+            from_=10,
+            to=36,
+            orient="horizontal",
+            length=300,
+            bg="#1a1a2e",
+            fg="white",
+            highlightbackground="#1a1a2e",
+            troughcolor="#0f3460",
+            command=on_change
+        )
+        slider.set(temp_size.get())
+        slider.pack(pady=10)
+        
+        # Frame de rangos
+        range_frame = tk.Frame(dialog, bg="#1a1a2e")
+        range_frame.pack(fill="x", padx=50)
+        tk.Label(range_frame, text="Pequeño (10px)", bg="#1a1a2e", fg="#888").pack(side="left")
+        tk.Label(range_frame, text="Grande (36px)", bg="#1a1a2e", fg="#888").pack(side="right")
+        
+        # Botones
+        btn_frame = tk.Frame(dialog, bg="#1a1a2e")
+        btn_frame.pack(pady=20)
+        
+        def aplicar():
+            self.config["font_size"] = temp_size.get()
+            # Guardar en BD
+            self.controller.config_model.guardar_config_proyeccion(self.config)
+            # Actualizar tabla
+            self._actualizar_tabla()
+            dialog.destroy()
+        
+        tk.Button(btn_frame,
+                 text="✅ Aplicar",
+                 command=aplicar,
+                 bg="#4CAF50",
+                 fg="white",
+                 font=("Segoe UI", 11),
+                 relief="flat",
+                 padx=20,
+                 pady=5,
+                 cursor="hand2").pack(side="left", padx=5)
+        
+        tk.Button(btn_frame,
+                 text="❌ Cancelar",
+                 command=dialog.destroy,
+                 bg="#FF5252",
+                 fg="white",
+                 font=("Segoe UI", 11),
+                 relief="flat",
+                 padx=20,
+                 pady=5,
+                 cursor="hand2").pack(side="left", padx=5)
+        
+        def resetear():
+            slider.set(16)
+            on_change(16)
+        
+        tk.Button(btn_frame,
+                 text="🔄 Resetear (16px)",
+                 command=resetear,
+                 bg="#2196F3",
+                 fg="white",
+                 font=("Segoe UI", 10),
+                 relief="flat",
+                 padx=15,
+                 pady=5,
+                 cursor="hand2").pack(side="left", padx=5)
+    
     def _setup_ui(self):
         """Configura la interfaz de usuario"""
         fondo = self.config.get("color_fondo", "black")
@@ -195,21 +323,11 @@ class ProyeccionView:
             label.pack(expand=True)
             return
         
-        # Determinar tamaño de fuente según ancho de ventana
-        try:
-            ancho = self.ventana.winfo_width()
-            if ancho < 1000:
-                tamaño_fuente = 14
-                altura_fila = 40
-            elif ancho < 1400:
-                tamaño_fuente = 18
-                altura_fila = 50
-            else:
-                tamaño_fuente = 22
-                altura_fila = 60
-        except:
-            tamaño_fuente = 16
-            altura_fila = 45
+        # Obtener tamaño de fuente de la configuración
+        font_size = self.config.get("font_size", 16)
+        
+        # Ajustar altura de fila según tamaño de fuente
+        altura_fila = font_size + 30
         
         # Crear tabla
         columnas = ("#", "Máquina", "Tipo", "Inicio", "Proceso", "Fin", "Estado")
@@ -225,24 +343,25 @@ class ProyeccionView:
                        rowheight=altura_fila,
                        fieldbackground=fondo,
                        borderwidth=0,
-                       font=("Segoe UI", tamaño_fuente))
+                       font=("Segoe UI", font_size))
         style.configure("Proyeccion.Treeview.Heading",
                        background=acento,
                        foreground=texto,
                        relief="flat",
                        borderwidth=0,
-                       font=("Segoe UI", tamaño_fuente + 2, "bold"))
+                       font=("Segoe UI", font_size + 2, "bold"))
         style.map('Proyeccion.Treeview',
                  background=[('selected', acento)],
                  foreground=[('selected', texto)])
         
         tree.configure(style="Proyeccion.Treeview")
         
-        # Configurar columnas
+        # Configurar columnas con ancho dinámico
         try:
-            ancho_col = int(self.frame_tabla.winfo_width() / 7)
+            ancho_ventana = self.ventana.winfo_width()
+            ancho_col = int(ancho_ventana / 7.5)
         except:
-            ancho_col = 100
+            ancho_col = 120
         
         for col in columnas:
             tree.heading(col, text=col)
@@ -262,10 +381,11 @@ class ProyeccionView:
             tree.tag_configure(tipo,
                               background=color,
                               foreground=text_color,
-                              font=("Segoe UI", tamaño_fuente, "bold"))
+                              font=("Segoe UI", font_size, "bold"))
         
         tree.tag_configure("pendiente", 
-                          background=self.theme.colores.get("pendiente", "#FFA500"))
+                          background=self.theme.colores.get("pendiente", "#FFA500"),
+                          font=("Segoe UI", font_size, "bold"))
         
         # Insertar datos
         for alerta in fallas_a_mostrar:
